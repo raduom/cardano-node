@@ -9,6 +9,7 @@ packages:
     cardano-node-chairman
     cardano-submit-api
     cardano-testnet
+    trace-dispatcher
     nix/workbench/cardano-topology
     bench/tx-generator
     nix/workbench/locli
@@ -36,6 +37,8 @@ package cryptonite
   -- generation is dubious. Set the flag so we use /dev/urandom by default.
   flags: -support_rdrand
 
+package trace-dispatcher
+  ghc-options: -Werror
 -- ---------------------------------------------------------
 -- Disable all tests by default
 
@@ -98,6 +101,9 @@ package io-classes
   tests: False
 
 package cardano-ledger-alonzo-test
+  tests: False
+
+package trace-dispatcher
   tests: False
 
 -- ---------------------------------------------------------
