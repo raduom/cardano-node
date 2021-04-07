@@ -47,6 +47,7 @@ import           Paths_cardano_node (version)
 
 import qualified Cardano.Crypto.Libsodium as Crypto
 
+import qualified Cardano.Logging as NL
 import           Cardano.Node.Configuration.Logging (LoggingLayer (..), Severity (..),
                    createLoggingLayer, nodeBasicInfo, shutdownLoggingLayer)
 import           Cardano.Node.Configuration.POM (NodeConfiguration (..),
@@ -112,15 +113,19 @@ runNode cmdPc = do
 
     eitherSomeProtocol <- runExceptT $ mkConsensusProtocol nc
 
-    p :: SomeConsensusProtocol <-
+    baseTrace <- NL.standardTracer Nothing
+
+    SomeConsensusProtocol (p :: Consensus.Protocol IO blk (BlockProtocol blk)) <-
       case eitherSomeProtocol of
         Left err -> putStrLn (displayError err) >> exitFailure
         Right p -> pure p
 
     eLoggingLayer <- runExceptT $ createLoggingLayer
-                     (Text.pack (showVersion version))
-                     nc
-                     p
+                       (ncTraceConfig nc)
+                       (Text.pack (showVersion version))
+                       nc
+                       p
+                       baseTrace
 
     loggingLayer <- case eLoggingLayer of
                       Left err  -> putTextLn (show err) >> exitFailure
@@ -167,6 +172,7 @@ runNode cmdPc = do
                 trace
                 nodeKernelData
                 (llEKGDirect loggingLayer)
+                baseTrace
 
     Async.withAsync (handlePeersListSimple trace nodeKernelData)
         $ \_peerLogingThread ->
