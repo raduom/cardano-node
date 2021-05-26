@@ -43,8 +43,6 @@ import           Cardano.TraceDispatcher.Common.Byron ()
 import           Cardano.TraceDispatcher.Common.HardFork ()
 import           Cardano.TraceDispatcher.ChainDB.Formatting ()
 
-import           Cardano.Node.Protocol.Types
-
 
 ------------------------------------------------------------------------------
 -- Byron protocol
