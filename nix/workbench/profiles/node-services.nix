@@ -74,7 +74,7 @@ let
                  {ns = "Cardano.Node.ChainDB"; backends = ["Forwarder"];}
                ];
 
-               TraceOptionForwarder = {host = "loopback"; port = 46;};
+               TraceOptionForwarder = {filePath = "./forwarder.trace";};
 
                TraceTxInbound       = true;
 
