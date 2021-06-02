@@ -52,7 +52,7 @@ import qualified Cardano.Crypto.Libsodium as Crypto
 import qualified Cardano.Logging as NL
 import           Cardano.Node.Configuration.Logging (LoggingLayer (..),
                      Severity (..), createLoggingLayer, nodeBasicInfo,
-                     shutdownLoggingLayer)
+                     shutdownLoggingLayer, EKGDirect (..))
 import           Cardano.Node.Configuration.POM (NodeConfiguration (..),
                      PartialNodeConfiguration (..),
                      defaultPartialNodeConfiguration, makeNodeConfiguration,
@@ -123,7 +123,8 @@ runNode cmdPc = do
         Left err -> putStrLn (displayError err) >> exitFailure
         Right p -> pure p
 
-    baseTrace <- NL.standardTracer Nothing
+    -- New logging initialisation1
+    baseTrace    <- NL.standardTracer Nothing
 
     eLoggingLayer <- runExceptT $ createLoggingLayer
                      (ncTraceConfig nc)
@@ -135,6 +136,19 @@ runNode cmdPc = do
     loggingLayer <- case eLoggingLayer of
                       Left err  -> putTextLn (show err) >> exitFailure
                       Right res -> return res
+
+    -- New logging initialisation2
+    loggerConfiguration <-
+      case getLast $ pncConfigFile cmdPc of
+        Just fileName ->  NL.readConfiguration (unConfigPath fileName)
+        Nothing -> putTextLn "No configuration file name found!" >> exitFailure
+-- TODO JNF
+--    putStrLn (show loggerConfiguration)
+    forwardTrace <- NL.forwardTracer loggerConfiguration
+    mbEkgTrace   <- case llEKGDirect loggingLayer of
+                      Nothing -> pure Nothing
+                      Just ekgDirect ->
+                        liftM Just (NL.ekgTracer (Right (ekgServer ekgDirect)))
 
     !trace <- setupTrace loggingLayer
     let tracer = contramap pack $ toLogObject trace
@@ -152,6 +166,7 @@ runNode cmdPc = do
           -- Used for ledger queries and peer connection status.
           nodeKernelData <- mkNodeKernelData
           let ProtocolInfo { pInfoConfig = cfg } = Protocol.protocolInfo runP
+
           tracers <- mkDispatchTracers
                        (Consensus.configBlock cfg)
                        (ncTraceConfig nc)
@@ -159,6 +174,10 @@ runNode cmdPc = do
                        nodeKernelData
                        (llEKGDirect loggingLayer)
                        baseTrace
+                       forwardTrace
+                       mbEkgTrace
+                       loggerConfiguration
+
           Async.withAsync (handlePeersListSimple trace nodeKernelData)
               $ \_peerLogingThread ->
                 -- We ignore peer loging thread if it dies, but it will be killed
