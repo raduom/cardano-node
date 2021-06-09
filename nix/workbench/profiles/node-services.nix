@@ -77,6 +77,8 @@ let
 
                TraceOptionForwarder = {host = "127.0.0.1"; port = 3010;};
 
+               TraceOptionForwardCache = 700;
+
                TraceTxInbound       = true;
 
                defaultScribes = [
