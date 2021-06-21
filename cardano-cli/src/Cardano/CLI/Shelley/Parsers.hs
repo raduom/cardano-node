@@ -344,6 +344,8 @@ pStakeAddressCmd =
                                         <$> pStakeVerifier
                                         <*> pOutputFile
 
+    -- TODO: Alonzo - Update pStakeAddressDelegationCert to also accept a script
+    -- as a verifier.
     pStakeAddressDelegationCert :: Parser StakeAddressCmd
     pStakeAddressDelegationCert = StakeCredentialDelegationCert
                                     <$> pStakeVerifier
