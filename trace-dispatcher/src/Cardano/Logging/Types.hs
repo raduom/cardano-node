@@ -92,10 +92,10 @@ class LogFormatting a where
 data Metric
   -- | An integer metric.
   -- If the text array is not empty is appended as last elements to the namespace
-    = IntM [Text] Integer
+    = IntM Namespace Integer
   -- | A double metric.
   -- If the text array is not empty is appended as last elements to the namespace
-    | DoubleM [Text] Double
+    | DoubleM Namespace Double
   deriving (Show, Eq)
 
 -- | A helper function for creating an |Object| given a list of pairs, named items,
@@ -113,17 +113,17 @@ emptyObject = HM.empty
 -- If you don't want to add an item for documentation enter an empty text.
 newtype Documented a = Documented {undoc :: [DocMsg a]}
 
+-------------------------------------------------------------------
+-- A unique identifier for every message, composed of text
+type Namespace = [Text]
+
 -- | Document a message by giving a prototype, its most special name in the namespace
 -- and a comment in markdown format
 data DocMsg a = DocMsg {
     dmPrototype :: a
-  , dmName      :: [Text]
+  , dmMetricsMD :: [(Namespace, Text)]
   , dmMarkdown  :: Text
 }
-
--------------------------------------------------------------------
--- A unique identifier for every message, composed of text
-type Namespace = [Text]
 
 -- | Context any log message carries
 data LoggingContext = LoggingContext {
@@ -211,9 +211,9 @@ data BackendConfig =
   deriving (Eq, Ord, Show, Generic)
 
 instance AE.ToJSON BackendConfig where
-  toJSON Forwarder     = AE.String "Forwarder"
-  toJSON EKGBackend    = AE.String "EKGBackend"
-  toJSON (Stdout f)    = AE.String $ "Stdout " <> (pack . show) f
+  toJSON Forwarder  = AE.String "Forwarder"
+  toJSON EKGBackend = AE.String "EKGBackend"
+  toJSON (Stdout f) = AE.String $ "Stdout " <> (pack . show) f
 
 instance AE.FromJSON BackendConfig where
   parseJSON (AE.String "Forwarder")            = pure Forwarder
@@ -274,21 +274,23 @@ data TraceControl where
     Reset     :: TraceControl
     Config    :: TraceConfig -> TraceControl
     Optimize  :: TraceControl
-    Document  :: Int -> Text -> DocCollector -> TraceControl
+    Document  :: Int -> Text -> [(Namespace, Text)] -> DocCollector -> TraceControl
 
 newtype DocCollector = DocCollector (IORef (Map Int LogDoc))
 
+
 data LogDoc = LogDoc {
-    ldDoc       :: Text
-  , ldNamespace :: [Namespace]
-  , ldSeverity  :: [SeverityS]
-  , ldPrivacy   :: [Privacy]
-  , ldDetails   :: [DetailLevel]
-  , ldBackends  :: [(BackendConfig, FormattedMessage)]
+    ldDoc        :: Text
+  , ldMetricsDoc :: Map Namespace Text
+  , ldNamespace  :: [Namespace]
+  , ldSeverity   :: [SeverityS]
+  , ldPrivacy    :: [Privacy]
+  , ldDetails    :: [DetailLevel]
+  , ldBackends   :: [(BackendConfig, FormattedMessage)]
 } deriving(Eq, Show)
 
-emptyLogDoc :: Text -> LogDoc
-emptyLogDoc d = LogDoc d [] [] [] [] []
+emptyLogDoc :: Text -> [(Namespace, Text)] -> LogDoc
+emptyLogDoc d m = LogDoc d (Map.fromList m) [] [] [] [] []
 
 -- | Type for a Fold
 newtype Folding a b = Folding b

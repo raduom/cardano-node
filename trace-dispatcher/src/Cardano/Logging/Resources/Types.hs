@@ -3,6 +3,7 @@
 module Cardano.Logging.Resources.Types
     (
       ResourceStats(..)
+    , docResourceStats
     ) where
 
 
@@ -26,6 +27,22 @@ data ResourceStats
       , rThreads    :: !Word64
       }
   deriving (Show)
+
+docResourceStats :: Documented (ResourceStats)
+docResourceStats = Documented [
+      DocMsg
+        (ResourceStats 1 1 1 1 1 1 1 1 1 1)
+        [(["Stat","Cputicks"], "Reports the CPU ticks, sice the process was started")
+        ,(["Mem","Resident"], "TODO JNF")
+        ,(["RTS","GcLiveBytes"],"TODO JNF")
+        ,(["RTS","GcMajorNum"],"TODO JNF")
+        ,(["RTS","GcMinorNum"],"TODO JNF")
+        ,(["RTS","Gcticks"],"TODO JNF")
+        ,(["RTS","Mutticks"],"TODO JNF")
+        ,(["RTS","Threads"],"TODO JNF")
+        ]
+        "TODO JNF"
+    ]
 
 instance LogFormatting ResourceStats where
     forHuman rs = "Resources: CpuTicks " <> (pack . show) (rCentiCpu rs)

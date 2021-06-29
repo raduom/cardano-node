@@ -553,7 +553,7 @@ newtype Documented a = Documented {undoc :: [DocMsg a]}
 
 data DocMsg a = DocMsg {
     dmPrototype :: a
-  , dmName      :: [Text]
+  , dmMetricsMD :: [(Text, Text)]
   , dmMarkdown  :: Text
 }
 ```

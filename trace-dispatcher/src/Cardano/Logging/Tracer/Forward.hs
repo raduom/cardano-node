@@ -66,7 +66,6 @@ import           Trace.Forward.Network.Forwarder (forwardTraceObjectsResp)
 import           Cardano.Logging.DocuGenerator
 import           Cardano.Logging.Types
 
-
 -- Instances for 'TraceObject' to forward it using 'trace-forward' library.
 
 deriving instance Generic Privacy
@@ -109,16 +108,9 @@ forwardTracer config = do
     output tbQueue LoggingContext {} Nothing (FormattedForwarder lo) = liftIO $ do
       atomically $ writeTBQueue tbQueue lo
     output _tbQueue LoggingContext {} (Just Reset) _msg = liftIO $ do
-      -- TODO JNF discuss reconfiguration
       pure ()
     output _tbQueue lk (Just c@Document {}) (FormattedForwarder lo) = do
-      case toHuman lo of
-        Just hr -> docIt (Stdout HumanFormatUncoloured)
-                         (FormattedHuman False "") (lk, Just c, hr)
-        Nothing -> pure ()
-      case toMachine lo of
-        Just mr -> docIt (Stdout MachineFormat) (FormattedMachine "") (lk, Just c, mr)
-        Nothing -> pure ()
+      docIt Forwarder (FormattedHuman False "") (lk, Just c, lo)
     output _tbQueue LoggingContext {} _ _a = pure ()
 
 launchForwardersSimple :: RemoteAddr -> TBQueue TraceObject -> EKG.Store -> IO ()

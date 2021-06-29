@@ -19,6 +19,7 @@ import qualified System.Metrics.Gauge as Gauge
 import qualified System.Metrics.Label as Label
 import           System.Remote.Monitoring (Server, getGauge, getLabel)
 
+
 ekgTracer :: MonadIO m => Either Metrics.Store Server-> m (Trace m FormattedMessage)
 ekgTracer storeOrServer = liftIO $ do
     registeredGauges <- newIORef Map.empty

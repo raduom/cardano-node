@@ -19,11 +19,3 @@ startResourceTracer tr = do
         Nothing -> pure ()
       threadDelay 1000000 -- TODO JNF:  make configurable
                                -- in microseconds
-
-docResourceStats :: Documented (ResourceStats)
-docResourceStats = Documented [
-      DocMsg
-        (ResourceStats 1 1 1 1 1 1 1 1 1 1)
-        []
-        "TODO jnf."
-    ]

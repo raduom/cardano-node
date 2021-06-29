@@ -38,7 +38,6 @@ import           Cardano.Logging.FrequencyLimiter (LimitingMessage (..),
 import           Cardano.Logging.Trace (filterTraceBySeverity, setDetails)
 import           Cardano.Logging.Types
 
--- import           Debug.Trace
 
 -- | Call this function at initialisation, and later for reconfiguration
 configureTracers :: Monad m => TraceConfig -> Documented a -> [Trace m a]-> m ()
@@ -153,6 +152,24 @@ withNamespaceConfig name extract withConfig tr = do
         Left (_cmap, Just _v) ->
                       error $ "Trace not reset before reconfiguration (4)"
                                   ++ show (lcNamespace lc)
+    mkTrace ref (lc, Just dc@(Document {}), a) = do
+      eitherConf <- liftIO $ readIORef ref
+      case eitherConf of
+        Right val -> do
+          tt <- withConfig (Just val) tr
+          T.traceWith
+            (unpackTrace tt) (lc, Just dc, a)
+        Left (cmap, Just v) ->
+          case Map.lookup (lcNamespace lc) cmap of
+                Just val -> do
+                  tt <- withConfig (Just val) tr
+                  T.traceWith (unpackTrace tt) (lc, Just dc, a)
+                Nothing  -> do
+                  tt <- withConfig (Just v) tr
+                  T.traceWith (unpackTrace tt) (lc, Just dc, a)
+        Left (_cmap, Nothing) -> error ("Missing configuration(2) " <> name <> " ns " <> show (lcNamespace lc))
+
+
 
 -- | Filter a trace by severity and take the filter value from the config
 filterSeverityFromConfig :: (MonadIO m) =>
@@ -295,7 +312,7 @@ parseRepresentation bs = transform (decodeEither' bs)
       in TraceConfig
           tc''''
           (traceOptionForwarder cr)
-          (traceOptionForwardCache cr)
+          (traceOptionForwardQueueSize cr)
 
 data TraceOptionSeverity = TraceOptionSeverity {
       nsS      :: Text
@@ -362,12 +379,12 @@ instance AE.FromJSON TraceOptionLimiter where
                            <*> obj .: "limiterFrequency"
 
 data ConfigRepresentation = ConfigRepresentation {
-    traceOptionSeverity     :: [TraceOptionSeverity]
-  , traceOptionDetail       :: [TraceOptionDetail]
-  , traceOptionBackend      :: [TraceOptionBackend]
-  , traceOptionLimiter      :: [TraceOptionLimiter]
-  , traceOptionForwarder    :: RemoteAddr
-  , traceOptionForwardCache :: Int
+    traceOptionSeverity         :: [TraceOptionSeverity]
+  , traceOptionDetail           :: [TraceOptionDetail]
+  , traceOptionBackend          :: [TraceOptionBackend]
+  , traceOptionLimiter          :: [TraceOptionLimiter]
+  , traceOptionForwarder        :: RemoteAddr
+  , traceOptionForwardQueueSize :: Int
   }
   deriving (Eq, Ord, Show)
 
@@ -378,7 +395,7 @@ instance AE.FromJSON ConfigRepresentation where
                            <*> obj .: "TraceOptionBackend"
                            <*> obj .: "TraceOptionLimiter"
                            <*> obj .: "TraceOptionForwarder"
-                           <*> obj .: "TraceOptionForwardCache"
+                           <*> obj .: "TraceOptionForwardQueueSize"
 
 
 --------------------------------------------------------

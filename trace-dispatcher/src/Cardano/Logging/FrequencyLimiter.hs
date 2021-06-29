@@ -19,8 +19,6 @@ import           GHC.Generics
 import           Cardano.Logging.Trace
 import           Cardano.Logging.Types
 
--- import           Debug.Trace
-
 data LimiterSpec = LimiterSpec {
     lsNs        :: [Text]
   , lsName      :: Text
@@ -60,7 +58,8 @@ instance LogFormatting LimitingMessage where
         , "numSuppressed" .= Number (fromIntegral num)
         ]
   asMetrics (StartLimiting _txt)          = []
-  asMetrics (StopLimiting txt num)        = [IntM ["SuppressedMessages " <> txt]
+  asMetrics (StopLimiting txt num)        = [IntM
+                                              ["SuppressedMessages " <> txt]
                                               (fromIntegral num)]
   asMetrics (RememberLimiting _txt _num)  = []
 

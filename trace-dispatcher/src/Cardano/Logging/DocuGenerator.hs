@@ -33,8 +33,9 @@ documentTracers (Documented documented) tracers = do
     docTrace docIdx docColl (Trace tr) =
       mapM_
         (\ (DocMsg {..}, idx) -> do
-          T.traceWith tr (emptyLoggingContext {lcNamespace = dmName},
-                          Just (Document idx dmMarkdown docColl), dmPrototype))
+          T.traceWith tr (emptyLoggingContext,
+                          Just (Document idx dmMarkdown dmMetricsMD docColl),
+                                dmPrototype))
         docIdx
 
 docIt :: MonadIO m =>
@@ -43,7 +44,7 @@ docIt :: MonadIO m =>
   -> (LoggingContext, Maybe TraceControl, a)
   -> m ()
 docIt backend formattedMessage (LoggingContext {..},
-  Just (Document idx mdText (DocCollector docRef)), _msg) = do
+  Just (Document idx mdText mdMetrics (DocCollector docRef)), _msg) = do
   liftIO $ modifyIORef docRef (\ docMap ->
       Map.insert
         idx
@@ -61,7 +62,7 @@ docIt backend formattedMessage (LoggingContext {..},
                   })
           (case Map.lookup idx docMap of
                         Just e  -> e
-                        Nothing -> emptyLogDoc mdText))
+                        Nothing -> emptyLogDoc mdText mdMetrics))
         docMap)
 
 buildersToText :: [(Namespace, Builder)] -> IO Text
@@ -95,6 +96,7 @@ documentMarkdown (Documented documented) tracers = do
       , propertiesBuilder ld
       , backendsBuilder (nub ldBackends)
       , betweenLines (fromText ldDoc)
+      , metricsBuilder ldMetricsDoc (filter fMetrics (nub ldBackends))
       ]
 
     namespacesBuilder :: [Namespace] -> Builder
@@ -185,20 +187,53 @@ documentMarkdown (Documented documented) tracers = do
 
     backendsBuilder :: [(BackendConfig, FormattedMessage)] -> Builder
     backendsBuilder [] = fromText "No backends found"
-    backendsBuilder l  = fromText "Backends: "
-                          <> mconcat (intersperse (fromText ", ")
+    backendsBuilder l  = fromText "Backends:\n\t"
+                          <> mconcat (intersperse (fromText ",\n\t")
                                 (map backendFormatToText l))
 
     backendFormatToText :: (BackendConfig, FormattedMessage) -> Builder
-    backendFormatToText (be, FormattedMetrics _) = asCode (fromString (show be))
-                            <> fromText " / "
-                            <> asCode "Metrics"
-    backendFormatToText (be, FormattedHuman c _) = asCode (fromString (show be))
-                            <> fromText " / "
-                            <> asCode ("Human" <> if c then "coloured" else "")
+    backendFormatToText (be, FormattedMetrics _) = asCode (fromString   (show be))
+
+    backendFormatToText (be, FormattedHuman _c _) = asCode (fromString (show be))
     backendFormatToText (be, FormattedMachine _) = asCode (fromString (show be))
-                            <> fromText " / "
-                            <> asCode "Machine"
+
+    fMetrics :: (BackendConfig, FormattedMessage) -> Bool
+    fMetrics (EKGBackend, FormattedMetrics (_hd:_tl)) = True
+    fMetrics _                                        = False
+
+    metricsBuilder ::
+         Map.Map Namespace Text
+      -> [(BackendConfig, FormattedMessage)]
+      -> Builder
+    metricsBuilder _ [] = mempty
+    metricsBuilder metricsDoc l  =
+      mconcat (intersperse (fromText ",\n")
+        (map (metricsFormatToText metricsDoc) l))
+
+    metricsFormatToText ::
+         Map.Map Namespace Text
+      -> (BackendConfig, FormattedMessage)
+      -> Builder
+    metricsFormatToText metricsDoc (_be, FormattedMetrics l) =
+      mconcat (intersperse (fromText ",\n")
+        (map (metricFormatToText metricsDoc) l))
+
+    metricFormatToText :: Map.Map Namespace Text -> Metric -> Builder
+    metricFormatToText metricsDoc (IntM ns _) =
+      fromText "#### _Int metric:_ "
+        <> (mconcat (intersperse (singleton '.') (map fromText ns)))
+          <> fromText "\n"
+            <> case Map.lookup ns metricsDoc of
+                        Just text -> betweenLines (fromText text)
+                        Nothing -> mempty
+
+    metricFormatToText metricsDoc (DoubleM ns _) =
+      fromText "#### _Double metric:_ "
+          <> mconcat (intersperse (singleton '.') (map fromText ns))
+            <> fromText "\n"
+              <> case Map.lookup ns metricsDoc of
+                        Just text -> betweenLines (fromText text)
+                        Nothing -> mempty
 
 asCode :: Builder -> Builder
 asCode b = singleton '`' <> b <> singleton '`'

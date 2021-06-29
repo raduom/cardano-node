@@ -59,30 +59,30 @@ let
                TraceMempool         = true;
 
                TraceOptionSeverity  = [
-                 {ns = ""; severity = "InfoF";}
-                 {ns = "Node.AcceptPolicy"; severity = "SilenceF";}
-                 {ns = "Node.Mempool"; severity = "DebugF";}
+                 {ns = ""; severity = "DebugF";}
+                 {ns = "Node.Resources"; severity = "DebugF";}
+                 ## {ns = "Node.Mempool"; severity = "DebugF";}
                  {ns = "Node.ChainDB"; severity = "DebugF";}
-                 {ns = "Node.ChainDB.ImmutableDBEvent"; severity = "WarningF";}
+                 ## {ns = "Node.ChainDB.ImmutableDBEvent"; severity = "WarningF";}
                ];
 
                TraceOptionDetail = [
                  {ns = ""; detail = "DRegular";}
-                 {ns = "Node.BlockFetchClient"; detail = "DBrief";}
+                 ## {ns = "Node.BlockFetchClient"; detail = "DBrief";}
                ];
 
                TraceOptionBackend = [
-                 {ns = ""; backends = ["Stdout HumanFormatColoured" "Forwarder" "EKGBackend"];}
-                 {ns = "Node.ChainDB"; backends = ["Forwarder"];}
+                 {ns = ""; backends = ["Stdout MachineFormat" "EKGBackend"];}
+                 ## {ns = "Node.ChainDB"; backends = ["Stdout HumanFormatColoured"];}
                ];
 
                TraceOptionLimiter = [
-                 {ns = "Node.ChainSyncNode"; limiterName = "ChainSync limiter"; limiterFrequency = 1;}
+                 {ns = "Node.ChainDB.OpenEvent"; limiterName = "ChainDB open limiter"; limiterFrequency = 0.1;}
                ];
 
                TraceOptionForwarder = {filePath = "/tmp/forwarder.sock";};
 
-               TraceOptionForwardCache = 700;
+               TraceOptionForwardQueueSize = 700;
 
                TraceTxInbound       = true;
 
