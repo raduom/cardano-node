@@ -58,7 +58,7 @@ filterTrace :: (Monad m) =>
 filterTrace ff (Trace tr) = Trace $ T.squelchUnless
     (\case
       (_lc, Just _, _a)     -> True
-      (lc, mbC, a)              -> ff (lc, mbC, a))
+      (lc, mbC, a)          -> ff (lc, mbC, a))
       tr
 
 --- | Keep the Just values and forget about the Nothings
@@ -85,7 +85,7 @@ filterTraceBySeverity :: Monad m =>
 filterTraceBySeverity (Just minSeverity) =
     filterTrace $
       \case
-        (_lc, Just _, _a)     -> True
+        (_lc, Just _, _a)  -> True
         (lc, _, _e)                ->
           case lcSeverity lc of
             Just s  -> fromEnum s >= fromEnum minSeverity

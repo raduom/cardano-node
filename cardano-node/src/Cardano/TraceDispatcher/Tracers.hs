@@ -1064,6 +1064,6 @@ docTracers configFileName outputFileName _ = do
             ++ rsTrDoc
             ++ biTrDoc
 
-    res <- buildersToText bl
+    res <- buildersToText bl trConfig
     T.writeFile outputFileName res
     pure ()

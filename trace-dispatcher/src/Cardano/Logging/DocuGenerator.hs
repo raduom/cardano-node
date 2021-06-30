@@ -4,9 +4,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Logging.DocuGenerator (
-    docIt
-  , documentMarkdown
+    documentMarkdown
   , buildersToText
+  , docIt
+  , addFiltered
+  , addLimiter
 ) where
 
 import           Cardano.Logging.Types
@@ -23,6 +25,7 @@ import           Data.Text.Lazy.Builder (Builder, fromString, fromText,
                      singleton)
 import           Data.Time (getZonedTime)
 
+
 documentTracers :: MonadIO m => Documented a -> [Trace m a] -> m DocCollector
 documentTracers (Documented documented) tracers = do
     let docIdx = zip documented [0..]
@@ -37,6 +40,30 @@ documentTracers (Documented documented) tracers = do
                           Just (Document idx dmMarkdown dmMetricsMD docColl),
                                 dmPrototype))
         docIdx
+
+addFiltered :: MonadIO m => TraceControl -> Maybe SeverityF -> m ()
+addFiltered (Document idx mdText mdMetrics (DocCollector docRef)) (Just sev) = do
+  liftIO $ modifyIORef docRef (\ docMap ->
+      Map.insert
+        idx
+        ((\e -> e { ldFiltered = sev : ldFiltered e})
+          (case Map.lookup idx docMap of
+                        Just e  -> e
+                        Nothing -> emptyLogDoc mdText mdMetrics))
+        docMap)
+addFiltered _ _ = pure ()
+
+addLimiter :: MonadIO m => TraceControl -> (Text, Double) -> m ()
+addLimiter (Document idx mdText mdMetrics (DocCollector docRef)) (ln, lf) = do
+  liftIO $ modifyIORef docRef (\ docMap ->
+      Map.insert
+        idx
+        ((\e -> e { ldLimiter = (ln, lf) : ldLimiter e})
+          (case Map.lookup idx docMap of
+                        Just e  -> e
+                        Nothing -> emptyLogDoc mdText mdMetrics))
+        docMap)
+addLimiter _ _ = pure ()
 
 docIt :: MonadIO m =>
      BackendConfig
@@ -65,19 +92,19 @@ docIt backend formattedMessage (LoggingContext {..},
                         Nothing -> emptyLogDoc mdText mdMetrics))
         docMap)
 
-buildersToText :: [(Namespace, Builder)] -> IO Text
-buildersToText builderList = do
+buildersToText :: [(Namespace, Builder)] -> TraceConfig -> IO Text
+buildersToText builderList configuration = do
   time <- getZonedTime
 --  tz   <- getTimeZone
   let sortedBuilders = sortBy (\ (l,_) (r,_) -> compare l r) builderList
       num = length builderList
       content = mconcat $ intersperse (fromText "\n\n") (map snd sortedBuilders)
+      config  = fromString $ "\n\nConfiguration: " <> show configuration
       numbers = fromString $ "\n\n" <> show num <> " log messages."
-      ts      = fromString $ "\nGenerated at "
-                  <> show time <> "."
-  pure $ toStrict $ toLazyText (content <> numbers <> ts)
+      ts      = fromString $ "\nGenerated at " <> show time <> "."
+  pure $ toStrict $ toLazyText (content <> config <> numbers <> ts)
 
-documentMarkdown :: ({-LogFormatting a,-} MonadIO m) =>
+documentMarkdown :: MonadIO m =>
      Documented a
   -> [Trace m a]
   -> m [(Namespace, Builder)]
@@ -87,15 +114,18 @@ documentMarkdown (Documented documented) tracers = do
     let sortedItems = sortBy
                         (\ (_,l) (_,r) -> compare (ldNamespace l) (ldNamespace r))
                         items
-    pure $ map (\(i, ld) -> (head (ldNamespace ld), documentItem (i, ld))) sortedItems
+    pure $ map (\(i, ld) -> case ldNamespace ld of
+                                []     -> (["No Namespace"], documentItem (i, ld))
+                                (hn:_) -> (hn, documentItem (i, ld)))
+               sortedItems
   where
     documentItem :: (Int, LogDoc) -> Builder
     documentItem (_idx, ld@LogDoc {..}) = mconcat $ intersperse (fromText "\n\n")
       [ namespacesBuilder (nub ldNamespace)
+      , betweenLines (fromText ldDoc)
 --      , representationBuilder (documented `listIndex` idx)
       , propertiesBuilder ld
-      , backendsBuilder (nub ldBackends)
-      , betweenLines (fromText ldDoc)
+      , configBuilder ld
       , metricsBuilder ldMetricsDoc (filter fMetrics (nub ldBackends))
       ]
 
@@ -177,18 +207,26 @@ documentMarkdown (Documented documented) tracers = do
           l   -> fromText "\nPrivacies: "
                   <> mconcat (intersperse (singleton ',')
                         (map (asCode . fromString . show) l))
-      <>
-        case nub ldDetails of
-          []  -> fromText "\nDetails:   " <> asCode (fromString (show DRegular))
-          [d] -> fromText "\nDetails:   " <> asCode (fromString (show d))
-          l   -> fromText "\nDetails:   "
+
+    configBuilder :: LogDoc -> Builder
+    configBuilder LogDoc {..} =
+      fromText "From current configuration\n"
+      <> case nub ldDetails of
+          []  -> fromText "Details:   " <> asCode (fromString (show DRegular))
+          [d] -> fromText "Details:   " <> asCode (fromString (show d))
+          l   -> fromText "Details:   "
                   <> mconcat (intersperse (singleton ',')
                         (map (asCode . fromString . show) l))
+      <> fromText "\n"
+      <> backendsBuilder (nub ldBackends)
+      <> fromText "\n"
+      <> filteredBuilder (nub ldFiltered) (nub ldSeverity)
+      <> limiterBuilder (nub ldLimiter)
 
     backendsBuilder :: [(BackendConfig, FormattedMessage)] -> Builder
     backendsBuilder [] = fromText "No backends found"
-    backendsBuilder l  = fromText "Backends:\n\t"
-                          <> mconcat (intersperse (fromText ",\n\t")
+    backendsBuilder l  = fromText "Backends:\n\t\t\t"
+                          <> mconcat (intersperse (fromText ",\n\t\t\t")
                                 (map backendFormatToText l))
 
     backendFormatToText :: (BackendConfig, FormattedMessage) -> Builder
@@ -196,6 +234,33 @@ documentMarkdown (Documented documented) tracers = do
 
     backendFormatToText (be, FormattedHuman _c _) = asCode (fromString (show be))
     backendFormatToText (be, FormattedMachine _) = asCode (fromString (show be))
+
+    filteredBuilder :: [SeverityF] -> [SeverityS] -> Builder
+    filteredBuilder [] _ = mempty
+    filteredBuilder l r =
+      fromText "Filtered: "
+      <> case (l, r) of
+            ([lh], [rh]) ->
+              if fromEnum rh >= fromEnum lh
+                then (asCode . fromString) "Visible"
+                else (asCode . fromString) "Invisible"
+            _ -> mempty
+      <> fromText " ~ "
+      <> mconcat (intersperse (fromText ", ")
+          (map (asCode . fromString . show) l))
+
+    limiterBuilder ::
+         [(Text, Double)]
+      -> Builder
+    limiterBuilder [] = mempty
+    limiterBuilder l  =
+      fromText "\nLimiters: "
+        <> mconcat (intersperse (fromText ", ")
+            (map (\ (n, d) ->  fromText "Limiter "
+                            <> (asCode . fromText) n
+                            <> fromText " with frequency "
+                            <> (asCode . fromString. show) d)
+                 l))
 
     fMetrics :: (BackendConfig, FormattedMessage) -> Bool
     fMetrics (EKGBackend, FormattedMetrics (_hd:_tl)) = True
@@ -207,8 +272,7 @@ documentMarkdown (Documented documented) tracers = do
       -> Builder
     metricsBuilder _ [] = mempty
     metricsBuilder metricsDoc l  =
-      mconcat (intersperse (fromText ",\n")
-        (map (metricsFormatToText metricsDoc) l))
+      mconcat $ map (metricsFormatToText metricsDoc) l
 
     metricsFormatToText ::
          Map.Map Namespace Text
@@ -225,7 +289,7 @@ documentMarkdown (Documented documented) tracers = do
           <> fromText "\n"
             <> case Map.lookup ns metricsDoc of
                         Just text -> betweenLines (fromText text)
-                        Nothing -> mempty
+                        Nothing   -> mempty
 
     metricFormatToText metricsDoc (DoubleM ns _) =
       fromText "#### _Double metric:_ "
@@ -233,7 +297,7 @@ documentMarkdown (Documented documented) tracers = do
             <> fromText "\n"
               <> case Map.lookup ns metricsDoc of
                         Just text -> betweenLines (fromText text)
-                        Nothing -> mempty
+                        Nothing   -> mempty
 
 asCode :: Builder -> Builder
 asCode b = singleton '`' <> b <> singleton '`'

@@ -33,11 +33,11 @@ import           Data.Text (Text, split, unpack)
 import           Data.Yaml
 import           GHC.Generics
 
+import           Cardano.Logging.DocuGenerator (addFiltered, addLimiter)
 import           Cardano.Logging.FrequencyLimiter (LimitingMessage (..),
                      limitFrequency)
 import           Cardano.Logging.Trace (filterTraceBySeverity, setDetails)
 import           Cardano.Logging.Types
-
 
 -- | Call this function at initialisation, and later for reconfiguration
 configureTracers :: Monad m => TraceConfig -> Documented a -> [Trace m a]-> m ()
@@ -170,7 +170,6 @@ withNamespaceConfig name extract withConfig tr = do
         Left (_cmap, Nothing) -> error ("Missing configuration(2) " <> name <> " ns " <> show (lcNamespace lc))
 
 
-
 -- | Filter a trace by severity and take the filter value from the config
 filterSeverityFromConfig :: (MonadIO m) =>
      Trace m a
@@ -179,7 +178,18 @@ filterSeverityFromConfig =
     withNamespaceConfig
       "severity"
       getSeverity
-      (\ a b -> pure $ filterTraceBySeverity a b)
+      (\ mbSev (Trace tr) ->
+      pure $ Trace $ T.arrow $ T.emit $
+        \case
+          (lc, Just c@Document {}, v) -> do
+            addFiltered c mbSev
+            T.traceWith
+              (unpackTrace (filterTraceBySeverity mbSev (Trace tr)))
+              (lc, Just c, v)
+          (lc, mbC, v) -> do
+            T.traceWith
+              (unpackTrace (filterTraceBySeverity mbSev (Trace tr)))
+              (lc, mbC, v))
 
 -- | Set detail level of a trace from the config
 withDetailsFromConfig :: (MonadIO m) =>
@@ -204,16 +214,16 @@ withBackendsFromConfig routerAndFormatter =
     routerAndFormatter
     (Trace T.nullTracer)
 
-data Limiter m a = Limiter Text (Trace m a)
+data Limiter m a = Limiter Text Double (Trace m a)
 
 instance Eq (Limiter m a) where
-  Limiter t1 _ == Limiter t2 _ = t1 == t2
+  Limiter t1 _ _ == Limiter t2 _ _ = t1 == t2
 
 instance Ord (Limiter m a) where
-  Limiter t1 _ <= Limiter t2 _ = t1 <= t2
+  Limiter t1 _ _ <= Limiter t2 _ _ = t1 <= t2
 
 instance Show (Limiter m a) where
-  show (Limiter name _) = "Limiter " <> unpack name
+  show (Limiter name _ _) = "Limiter " <> unpack name
 
 
 -- | Routing and formatting of a trace from the config
@@ -234,39 +244,94 @@ withLimitersFromConfig tr trl = do
          IORef (Map.Map Text (Limiter m a))
       -> TraceConfig
       -> Namespace
-      -> m (Limiter m a)
+      -> m (Maybe (Limiter m a))
     getLimiter stateRef config ns =
       case getLimiterSpec config ns of
-        Nothing -> pure (Limiter "noop" tr)
+        Nothing -> pure Nothing
         Just (name, frequency) -> do
           state <- liftIO $ readIORef stateRef
           case Map.lookup name state of
-            Just limiter -> pure limiter
+            Just limiter -> pure $ Just limiter
             Nothing -> do
               limiterTrace <- limitFrequency frequency name tr trl
-              let limiter = Limiter name limiterTrace
+              let limiter = Limiter name frequency limiterTrace
               liftIO $ writeIORef stateRef (Map.insert name limiter state)
-              pure limiter
+              pure $ Just limiter
 
     withLimiter ::
-         Maybe (Limiter m a)
+         Maybe (Maybe (Limiter m a))
       -> Trace m a
       -> m (Trace m a)
-    withLimiter Nothing (Trace tr') =
+    withLimiter Nothing tr' = pure tr'
+    withLimiter (Just Nothing) tr' = pure tr'
+
+
+    withLimiter (Just (Just (Limiter n d (Trace trli)))) (Trace tr') =
       pure $ Trace $ T.arrow $ T.emit $
-        \case
-          (lc, Nothing, v) -> do
-            T.traceWith tr' (lc, Nothing, v)
-          (lc, Just c, v) -> do
+        \ case
+          (lc, Nothing, v) ->
+            T.traceWith trli (lc, Nothing, v)
+          (lc, Just c@Document {}, v) -> do
+            addLimiter c (n, d)
+            T.traceWith tr' (lc, Just c, v)
+          (lc, Just c, v) ->
             T.traceWith tr' (lc, Just c, v)
 
-    withLimiter (Just (Limiter _n (Trace trli))) (Trace tr') =
-      pure $ Trace $ T.arrow $ T.emit $
-        \case
-          (lc, Nothing, v) -> do
-            T.traceWith trli (lc, Nothing, v)
-          (lc, Just c, v) -> do -- TODO JNF assumes both traces unite again
-            T.traceWith tr' (lc, Just c, v)
+--------------------------------------------------------
+-- Internal
+
+-- | If no severity can be found in the config, it is set to Warning
+getSeverity :: Applicative m => TraceConfig -> Namespace -> m SeverityF
+getSeverity config ns = pure $
+    fromMaybe WarningF (getOption severitySelector config ns)
+  where
+    severitySelector :: ConfigOption -> Maybe SeverityF
+    severitySelector (CoSeverity s) = Just s
+    severitySelector _              = Nothing
+
+-- | If no details can be found in the config, it is set to DRegular
+getDetails :: Applicative m => TraceConfig -> Namespace -> m DetailLevel
+getDetails config ns = pure $
+    fromMaybe DRegular (getOption detailSelector config ns)
+  where
+    detailSelector :: ConfigOption -> Maybe DetailLevel
+    detailSelector (CoDetail d) = Just d
+    detailSelector _            = Nothing
+
+-- | If no backends can be found in the config, it is set to
+-- [EKGBackend, Forwarder, Stdout HumanFormatColoured]
+getBackends :: Applicative m => TraceConfig -> Namespace -> m [BackendConfig]
+getBackends config ns = pure $
+    fromMaybe [EKGBackend, Forwarder, Stdout HumanFormatColoured]
+      (getOption backendSelector config ns)
+  where
+    backendSelector :: ConfigOption -> Maybe [BackendConfig]
+    backendSelector (CoBackend s) = Just s
+    backendSelector _             = Nothing
+
+-- | May return a limiter specification
+getLimiterSpec :: TraceConfig -> Namespace -> Maybe (Text, Double)
+getLimiterSpec = getOption limiterSelector
+  where
+    limiterSelector :: ConfigOption -> Maybe (Text, Double)
+    limiterSelector (CoLimiter n f) = Just (n, f)
+    limiterSelector _               = Nothing
+
+
+-- | Searches in the config to find an option
+getOption :: (ConfigOption -> Maybe a) -> TraceConfig -> Namespace -> Maybe a
+getOption sel config [] =
+  case Map.lookup [] (tcOptions config) of
+    Nothing -> Nothing
+    Just options -> case mapMaybe sel options of
+                      []        -> Nothing
+                      (opt : _) -> Just opt
+getOption sel config ns =
+  case Map.lookup ns (tcOptions config) of
+    Nothing -> getOption sel config (init ns)
+    Just options -> case mapMaybe sel options of
+                      []        -> getOption sel config (init ns)
+                      (opt : _) -> Just opt
 
 -- -----------------------------------------------------------------------------
 -- Configuration file
@@ -396,60 +461,3 @@ instance AE.FromJSON ConfigRepresentation where
                            <*> obj .: "TraceOptionLimiter"
                            <*> obj .: "TraceOptionForwarder"
                            <*> obj .: "TraceOptionForwardQueueSize"
-
-
---------------------------------------------------------
--- Internal
-
--- | If no severity can be found in the config, it is set to Warning
-getSeverity :: Applicative m => TraceConfig -> Namespace -> m SeverityF
-getSeverity config ns = pure $
-    fromMaybe WarningF (getOption severitySelector config ns)
-  where
-    severitySelector :: ConfigOption -> Maybe SeverityF
-    severitySelector (CoSeverity s) = Just s
-    severitySelector _              = Nothing
-
--- | If no details can be found in the config, it is set to DRegular
-getDetails :: Applicative m => TraceConfig -> Namespace -> m DetailLevel
-getDetails config ns = pure $
-    fromMaybe DRegular (getOption detailSelector config ns)
-  where
-    detailSelector :: ConfigOption -> Maybe DetailLevel
-    detailSelector (CoDetail d) = Just d
-    detailSelector _            = Nothing
-
--- | If no backends can be found in the config, it is set to
--- [EKGBackend, Forwarder, Stdout HumanFormatColoured]
-getBackends :: Applicative m => TraceConfig -> Namespace -> m [BackendConfig]
-getBackends config ns = pure $
-    fromMaybe [EKGBackend, Forwarder, Stdout HumanFormatColoured]
-      (getOption backendSelector config ns)
-  where
-    backendSelector :: ConfigOption -> Maybe [BackendConfig]
-    backendSelector (CoBackend s) = Just s
-    backendSelector _             = Nothing
-
--- | May return a limiter specification
-getLimiterSpec :: TraceConfig -> Namespace -> Maybe (Text, Double)
-getLimiterSpec = getOption limiterSelector
-  where
-    limiterSelector :: ConfigOption -> Maybe (Text, Double)
-    limiterSelector (CoLimiter n f) = Just (n, f)
-    limiterSelector _               = Nothing
-
-
--- | Searches in the config to find an option
-getOption :: (ConfigOption -> Maybe a) -> TraceConfig -> Namespace -> Maybe a
-getOption sel config [] =
-  case Map.lookup [] (tcOptions config) of
-    Nothing -> Nothing
-    Just options -> case mapMaybe sel options of
-                      []        -> Nothing
-                      (opt : _) -> Just opt
-getOption sel config ns =
-  case Map.lookup ns (tcOptions config) of
-    Nothing -> getOption sel config (init ns)
-    Just options -> case mapMaybe sel options of
-                      []        -> getOption sel config (init ns)
-                      (opt : _) -> Just opt

@@ -112,6 +112,7 @@ emptyObject = HM.empty
 -- important to provide a complete list, as the prototypes are used as well for configuration.
 -- If you don't want to add an item for documentation enter an empty text.
 newtype Documented a = Documented {undoc :: [DocMsg a]}
+  deriving Show
 
 -------------------------------------------------------------------
 -- A unique identifier for every message, composed of text
@@ -123,7 +124,7 @@ data DocMsg a = DocMsg {
     dmPrototype :: a
   , dmMetricsMD :: [(Namespace, Text)]
   , dmMarkdown  :: Text
-}
+} deriving (Show)
 
 -- | Context any log message carries
 data LoggingContext = LoggingContext {
@@ -278,7 +279,6 @@ data TraceControl where
 
 newtype DocCollector = DocCollector (IORef (Map Int LogDoc))
 
-
 data LogDoc = LogDoc {
     ldDoc        :: Text
   , ldMetricsDoc :: Map Namespace Text
@@ -287,10 +287,12 @@ data LogDoc = LogDoc {
   , ldPrivacy    :: [Privacy]
   , ldDetails    :: [DetailLevel]
   , ldBackends   :: [(BackendConfig, FormattedMessage)]
+  , ldFiltered   :: [SeverityF]
+  , ldLimiter    :: [(Text, Double)]
 } deriving(Eq, Show)
 
 emptyLogDoc :: Text -> [(Namespace, Text)] -> LogDoc
-emptyLogDoc d m = LogDoc d (Map.fromList m) [] [] [] [] []
+emptyLogDoc d m = LogDoc d (Map.fromList m) [] [] [] [] [] [] []
 
 -- | Type for a Fold
 newtype Folding a b = Folding b
