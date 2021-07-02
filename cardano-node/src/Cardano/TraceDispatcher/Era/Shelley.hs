@@ -130,13 +130,73 @@ instance LogFormatting (TPraosCannotForge era) where
 -- deriving newtype instance ToJSON KESPeriod
 
 instance LogFormatting HotKey.KESInfo where
-  forMachine _dtal HotKey.KESInfo { kesStartPeriod, kesEndPeriod, kesEvolution } =
-    mkObject
-      [ "kind" .= String "KESInfo"
-      , "startPeriod" .= kesStartPeriod
-      , "endPeriod" .= kesEndPeriod
-      , "evolution" .= kesEvolution
-      ]
+  forMachine _dtal forgeStateInfo =
+    let maxKesEvos = endKesPeriod - startKesPeriod
+        oCertExpiryKesPeriod = startKesPeriod + maxKesEvos
+        kesPeriodsUntilExpiry = max 0 (oCertExpiryKesPeriod - currKesPeriod)
+    in
+      if (kesPeriodsUntilExpiry > 7)
+        then mkObject
+              [ "kind" .= String "KESInfo"
+              , "startPeriod" .= startKesPeriod
+              , "endPeriod" .= currKesPeriod
+              , "evolution" .= endKesPeriod
+              ]
+        else mkObject
+              [ "kind" .= String "ExpiryLogMessage"
+              , "keyExpiresIn" .= kesPeriodsUntilExpiry
+              , "startPeriod" .= startKesPeriod
+              , "endPeriod" .= currKesPeriod
+              , "evolution" .= endKesPeriod
+              ]
+    where
+    HotKey.KESInfo
+      { kesStartPeriod = KESPeriod startKesPeriod
+      , kesEvolution = currKesPeriod
+      , kesEndPeriod = KESPeriod endKesPeriod
+      } = forgeStateInfo
+
+  forHuman forgeStateInfo =
+    let maxKesEvos = endKesPeriod - startKesPeriod
+        oCertExpiryKesPeriod = startKesPeriod + maxKesEvos
+        kesPeriodsUntilExpiry = max 0 (oCertExpiryKesPeriod - currKesPeriod)
+    in if (kesPeriodsUntilExpiry > 7)
+      then "KES info startPeriod  " <> show startKesPeriod
+            <> " currPeriod " <> show currKesPeriod
+            <> " endPeriod " <> show endKesPeriod
+             <> (Text.pack . show) kesPeriodsUntilExpiry
+             <> " KES periods."
+      else "Operational key will expire in "
+             <> (Text.pack . show) kesPeriodsUntilExpiry
+             <> " KES periods."
+    where
+    HotKey.KESInfo
+      { kesStartPeriod = KESPeriod startKesPeriod
+      , kesEvolution = currKesPeriod
+      , kesEndPeriod = KESPeriod endKesPeriod
+      } = forgeStateInfo
+
+  asMetrics forgeStateInfo =
+      let maxKesEvos = endKesPeriod - startKesPeriod
+          oCertExpiryKesPeriod = startKesPeriod + maxKesEvos
+          -- TODO JNF: What is the sense of it?
+      in  [
+            IntM ["operationalCertificateStartKESPeriod"]
+              (fromIntegral startKesPeriod)
+          , IntM ["operationalCertificateExpiryKESPeriod"]
+              (fromIntegral (startKesPeriod + maxKesEvos))
+          , IntM ["currentKESPeriod"]
+              (fromIntegral currKesPeriod)
+          , IntM ["remainingKESPeriods"]
+              (fromIntegral (max 0 (oCertExpiryKesPeriod - currKesPeriod)))
+          ]
+    where
+    HotKey.KESInfo
+      { kesStartPeriod = KESPeriod startKesPeriod
+      , kesEvolution = currKesPeriod
+      , kesEndPeriod = KESPeriod endKesPeriod
+      } = forgeStateInfo
+
 
 instance LogFormatting HotKey.KESEvolutionError where
   forMachine dtal (HotKey.KESCouldNotEvolve kesInfo targetPeriod) =

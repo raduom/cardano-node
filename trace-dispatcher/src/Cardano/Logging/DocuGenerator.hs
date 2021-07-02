@@ -298,6 +298,13 @@ documentMarkdown (Documented documented) tracers = do
               <> case Map.lookup ns metricsDoc of
                         Just text -> betweenLines (fromText text)
                         Nothing   -> mempty
+    metricFormatToText metricsDoc (CounterM ns _) =
+      fromText "#### _Counter metric:_ "
+          <> mconcat (intersperse (singleton '.') (map fromText ns))
+            <> fromText "\n"
+              <> case Map.lookup ns metricsDoc of
+                        Just text -> betweenLines (fromText text)
+                        Nothing   -> mempty
 
 asCode :: Builder -> Builder
 asCode b = singleton '`' <> b <> singleton '`'

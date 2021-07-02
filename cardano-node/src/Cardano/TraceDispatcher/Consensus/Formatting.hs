@@ -11,31 +11,45 @@
 
 module Cardano.TraceDispatcher.Consensus.Formatting
   (
+    HasKESInfoX(..)
+  , GetKESInfoX(..)
   ) where
 
 import           Control.Monad.Class.MonadTime (Time (..))
 import           Data.Aeson (ToJSON, Value (String), toJSON, (.=))
+import           Data.SOP.Strict
 import qualified Data.Text as Text
 import           Data.Time (DiffTime)
 import           Text.Show
 
 import           Cardano.Logging
-import           Cardano.Prelude hiding (Show, show)
-import           Cardano.TraceDispatcher.Formatting ()
+import           Cardano.Prelude hiding (All, Show, show)
 import           Cardano.TraceDispatcher.Era.Byron ()
 import           Cardano.TraceDispatcher.Era.Shelley ()
+import           Cardano.TraceDispatcher.Formatting ()
 import           Cardano.TraceDispatcher.Render
+
+import           Ouroboros.Consensus.Block.Forging
+import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
+import           Ouroboros.Consensus.HardFork.Combinator
+                     (HardForkForgeStateInfo (..))
+import           Ouroboros.Consensus.HardFork.Combinator.AcrossEras
+                     (OneEraForgeStateInfo (..),
+                     OneEraForgeStateUpdateError (..))
+import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
+import qualified Ouroboros.Consensus.Shelley.Protocol.HotKey as HotKey
+import           Ouroboros.Consensus.TypeFamilyWrappers
+                     (WrapForgeStateInfo (..), WrapForgeStateUpdateError (..))
 
 import           Ouroboros.Consensus.Block
 import           Ouroboros.Consensus.BlockchainTime (SystemStart (..))
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Util
                      (TraceBlockchainTimeEvent (..))
 import           Ouroboros.Consensus.Cardano.Block
-import           Ouroboros.Consensus.Ledger.Inspect (
-                     LedgerEvent (..), LedgerUpdate, LedgerWarning)
+import           Ouroboros.Consensus.Ledger.Inspect (LedgerEvent (..),
+                     LedgerUpdate, LedgerWarning)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr,
-                     GenTxId, HasTxId, LedgerSupportsMempool,
-                     txForgetValidated)
+                     GenTxId, LedgerSupportsMempool, txForgetValidated)
 import           Ouroboros.Consensus.Ledger.SupportsProtocol
 import           Ouroboros.Consensus.Mempool.API (MempoolSize (..),
                      TraceEventMempool (..))
@@ -57,6 +71,64 @@ import           Ouroboros.Network.DeltaQ (GSV (..), PeerGSV (..))
 import           Ouroboros.Network.KeepAlive (TraceKeepAliveClient (..))
 import           Ouroboros.Network.TxSubmission.Inbound
 import           Ouroboros.Network.TxSubmission.Outbound
+
+import           Shelley.Spec.Ledger.OCert (KESPeriod (..))
+
+
+class HasKESInfoX blk where
+  getKESInfoX :: Proxy blk -> ForgeStateUpdateError blk -> Maybe HotKey.KESInfo
+  getKESInfoX _ _ = Nothing
+
+instance HasKESInfoX (ShelleyBlock era) where
+  getKESInfoX _ (HotKey.KESCouldNotEvolve ki _)     = Just ki
+  getKESInfoX _ (HotKey.KESKeyAlreadyPoisoned ki _) = Just ki
+
+instance HasKESInfoX ByronBlock
+
+instance All HasKESInfoX xs => HasKESInfoX (HardForkBlock xs) where
+  getKESInfoX _ =
+      hcollapse
+    . hcmap (Proxy @HasKESInfoX) getOne
+    . getOneEraForgeStateUpdateError
+   where
+    getOne :: forall blk. HasKESInfoX blk
+           => WrapForgeStateUpdateError blk
+           -> K (Maybe HotKey.KESInfo) blk
+    getOne = K . getKESInfoX (Proxy @blk) . unwrapForgeStateUpdateError
+
+
+class GetKESInfoX blk where
+  getKESInfoFromStateInfoX :: Proxy blk -> ForgeStateInfo blk -> Maybe HotKey.KESInfo
+  getKESInfoFromStateInfoX _ _ = Nothing
+
+instance GetKESInfoX (ShelleyBlock era) where
+  getKESInfoFromStateInfoX _ fsi = Just fsi
+
+instance GetKESInfoX ByronBlock
+
+instance All GetKESInfoX xs => GetKESInfoX (HardForkBlock xs) where
+  getKESInfoFromStateInfoX _ forgeStateInfo =
+      case forgeStateInfo of
+        CurrentEraLacksBlockForging _ -> Nothing
+        CurrentEraForgeStateUpdated currentEraForgeStateInfo ->
+            hcollapse
+          . hcmap (Proxy @GetKESInfoX) getOne
+          . getOneEraForgeStateInfo
+          $ currentEraForgeStateInfo
+    where
+      getOne :: forall blk. GetKESInfoX blk
+             => WrapForgeStateInfo blk
+             -> K (Maybe HotKey.KESInfo) blk
+      getOne = K . getKESInfoFromStateInfoX (Proxy @blk) . unwrapForgeStateInfo
+
+instance LogFormatting a => LogFormatting (TraceLabelCreds a) where
+  forMachine dtal (TraceLabelCreds creds a)  =
+    mkObject [ "credentials" .= toJSON creds
+             , "val"         .= forMachine dtal a
+            ]
+-- TODO Trace lable creds as well
+  forHuman (TraceLabelCreds _t a)         = forHuman a
+  asMetrics (TraceLabelCreds _t a)        = asMetrics a
 
 
 instance (LogFormatting (LedgerUpdate blk), LogFormatting (LedgerWarning blk))
@@ -127,6 +199,10 @@ instance ConvertRawHash blk
       mkObject [ "kind" .= String "ChainSyncRollBackward"
                , "point" .= forMachine dtal point
                ]
+  asMetrics (TraceChainSyncRollForward _point) =
+      [CounterM ["ChainSync","RollForward"] Nothing]
+  asMetrics _ = []
+
 
 instance (LogFormatting peer, Show peer)
       => LogFormatting [TraceLabelPeer peer (FetchDecision [Point header])] where
@@ -136,6 +212,9 @@ instance (LogFormatting peer, Show peer)
     [ "kind"  .= String "PeersFetch"
     , "peers" .= toJSON
       (foldl' (\acc x -> forMachine DDetailed x : acc) [] xs) ]
+
+  asMetrics peers = [IntM ["connectedPeers"] (fromIntegral (length peers))]
+
 
 instance (LogFormatting peer, Show peer, LogFormatting a)
   => LogFormatting (TraceLabelPeer peer a) where
@@ -174,6 +253,7 @@ instance LogFormatting (BlockFetch.TraceFetchClientState header) where
 instance LogFormatting (TraceBlockFetchServerEvent blk) where
   forMachine _dtal _ =
     mkObject [ "kind" .= String "BlockFetchServer" ]
+  asMetrics _ = [CounterM ["served","block","count"] Nothing]
 
 instance LogFormatting (TraceTxSubmissionInbound txid tx) where
   forMachine _dtal (TraceTxSubmissionCollected count) =
@@ -201,6 +281,15 @@ instance LogFormatting (TraceTxSubmissionInbound txid tx) where
       [ "kind" .= String "TraceTxInboundCannotRequestMoreTxs"
       , "count" .= toJSON count
       ]
+  asMetrics (TraceTxSubmissionCollected count)=
+    [CounterM ["submissions", "submitted", "count"] (Just count)]
+  asMetrics (TraceTxSubmissionProcessed processed) =
+    [ CounterM ["submissions", "accepted", "count"]
+        (Just (ptxcAccepted processed))
+    , CounterM ["submissions", "rejected", "count"]
+        (Just (ptxcRejected processed))
+    ]
+  asMetrics _ = []
 
 instance (Show txid, Show tx)
       => LogFormatting (TraceTxSubmissionOutbound txid tx) where
@@ -264,6 +353,27 @@ instance
       , "txsInvalidated" .= map (forMachine dtal . txForgetValidated) txs1
       , "mempoolSize" .= forMachine dtal mpSz
       ]
+  asMetrics (TraceMempoolAddedTx _tx _mpSzBefore mpSz) =
+    [ IntM ["txsInMempool"] (fromIntegral $ msNumTxs mpSz)
+    , IntM ["mempoolBytes"] (fromIntegral $ msNumBytes mpSz)
+    ]
+  asMetrics (TraceMempoolRejectedTx _tx _txApplyErr mpSz) =
+    [ IntM ["txsInMempool"] (fromIntegral $ msNumTxs mpSz)
+    , IntM ["mempoolBytes"] (fromIntegral $ msNumBytes mpSz)
+    ]
+  asMetrics (TraceMempoolRemoveTxs _txs mpSz) =
+    [ IntM ["txsInMempool"] (fromIntegral $ msNumTxs mpSz)
+    , IntM ["mempoolBytes"] (fromIntegral $ msNumBytes mpSz)
+    ]
+  asMetrics (TraceMempoolManuallyRemovedTxs [] _txs1 mpSz) =
+    [ IntM ["txsInMempool"] (fromIntegral $ msNumTxs mpSz)
+    , IntM ["mempoolBytes"] (fromIntegral $ msNumBytes mpSz)
+    ]
+  asMetrics (TraceMempoolManuallyRemovedTxs txs _txs1 mpSz) =
+    [ IntM ["txsInMempool"] (fromIntegral $ msNumTxs mpSz)
+    , IntM ["mempoolBytes"] (fromIntegral $ msNumBytes mpSz)
+    , CounterM ["txsProcessedNum"] (Just (fromIntegral $ length txs))
+    ]
 
 instance LogFormatting MempoolSize where
   forMachine _dtal MempoolSize{msNumTxs, msNumBytes} =
@@ -274,12 +384,11 @@ instance LogFormatting MempoolSize where
 
 instance ( tx ~ GenTx blk
          , ConvertRawHash blk
-         , HasTxId tx
          , GetHeader blk
          , HasHeader blk
+         , HasKESInfoX blk
          , LedgerSupportsProtocol blk
          , SerialiseNodeToNodeConstraints blk
-         , Show (TxId tx)
          , Show (ForgeStateUpdateError blk)
          , Show (CannotForge blk)
          , LogFormatting (InvalidBlockReason blk)
@@ -378,7 +487,7 @@ instance ( tx ~ GenTx blk
           DDetailed
           (blockHash blk)
       , "blockSize" .= toJSON (estimateBlockSize (getHeader blk))
---      , "txIds" .= toJSON (map (show . txId) txs) TODO
+--      , "txIds" .= toJSON (map (show . txId) txs) TODO JNF
       ]
   forMachine dtal (TraceAdoptedBlock slotNo blk _txs) =
     mkObject
@@ -448,6 +557,26 @@ instance ( tx ~ GenTx blk
         <> showT (unSlotNo slotNo)
         <> ": " <> renderHeaderHash (Proxy @blk) (blockHash blk)
       --  <> ", TxIds: " <> showT (map txId txs) TODO Fix
+
+  asMetrics (TraceForgeStateUpdateError _ reason) =
+    case getKESInfoX (Proxy @blk) reason of
+      Nothing -> []
+      Just kesInfo ->
+        [ IntM
+            ["operationalCertificateStartKESPeriod"]
+            (fromIntegral . unKESPeriod . HotKey.kesStartPeriod $ kesInfo)
+        , IntM
+            ["operationalCertificateExpiryKESPeriod"]
+            (fromIntegral . unKESPeriod . HotKey.kesEndPeriod $ kesInfo)
+        , IntM
+            ["currentKESPeriod"]
+            0
+        , IntM
+            ["remainingKESPeriods"]
+            0
+        ]
+  asMetrics _ = []
+
 
 instance Show t => LogFormatting (TraceBlockchainTimeEvent t) where
     forMachine _dtal (TraceStartTimeInTheFuture (SystemStart start) toWait) =

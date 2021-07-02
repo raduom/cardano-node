@@ -10,7 +10,7 @@ import           System.Remote.Monitoring (forkServer)
 
 
 countDocumented :: Documented Int
-countDocumented = Documented [DocMsg 0 ["count"] "count"]
+countDocumented = Documented [DocMsg 0 [] "count"]
 
 testEKG :: IO ()
 testEKG = do

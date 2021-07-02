@@ -9,7 +9,8 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 
-{-# OPTIONS_GHC -Wno-unused-imports  #-}
+-- {-# OPTIONS_GHC -Wno-unused-imports  #-}
+{-# OPTIONS_GHC -Wno-deprecations  #-}
 
 
 module Cardano.TraceDispatcher.Tracers
@@ -17,7 +18,6 @@ module Cardano.TraceDispatcher.Tracers
   , docTracers
   ) where
 
-import           Data.Aeson (ToJSON)
 import qualified Data.Text.IO as T
 import           Network.Mux (MuxTrace (..), WithMuxBearer (..))
 import qualified Network.Socket as Socket
@@ -31,13 +31,12 @@ import           Cardano.TraceDispatcher.ChainDB.Docu
 import           Cardano.TraceDispatcher.Consensus.Combinators
 import           Cardano.TraceDispatcher.Consensus.Docu
 import           Cardano.TraceDispatcher.Consensus.StateInfo
-import           Cardano.TraceDispatcher.Era.ConvertTxId
 import           Cardano.TraceDispatcher.Formatting ()
 import           Cardano.TraceDispatcher.Network.Combinators
 import           Cardano.TraceDispatcher.Network.Docu
 import           Cardano.TraceDispatcher.Network.Formatting ()
-import           Cardano.TraceDispatcher.Resources (docResourceStats,
-                     startResourceTracer)
+import           Cardano.TraceDispatcher.Resources (
+                     startResourceTracer, namesForResources, severityResources)
 import qualified "trace-dispatcher" Control.Tracer as NT
 
 
@@ -49,19 +48,14 @@ import           Cardano.Tracing.Constraints (TraceConstraints)
 import           Cardano.Tracing.Kernel (NodeKernelData)
 import           Cardano.Tracing.OrphanInstances.Common (ToObject)
 import           Cardano.Tracing.Tracers
-import           "contra-tracer" Control.Tracer (Tracer (..), nullTracer)
+import           "contra-tracer" Control.Tracer (Tracer (..))
 
-import           Ouroboros.Consensus.Block (CannotForge, ForgeStateUpdateError,
-                     WithOrigin (..))
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Util
                      (TraceBlockchainTimeEvent (..))
-import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import           Ouroboros.Consensus.Byron.Ledger.Config (BlockConfig)
-import           Ouroboros.Consensus.Ledger.Inspect (LedgerUpdate,
-                     LedgerWarning)
 import           Ouroboros.Consensus.Ledger.Query (Query)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx,
-                     GenTxId, HasTxId, HasTxs)
+                     GenTxId)
 import           Ouroboros.Consensus.Ledger.SupportsProtocol
                      (LedgerSupportsProtocol)
 import           Ouroboros.Consensus.Mempool.API (TraceEventMempool (..))
@@ -195,18 +189,6 @@ mkCardanoTracer name namesFor severityFor privacyFor
           Nothing -> pure $ Trace NT.nullTracer
           Just tr -> pure tr
 
--- mkStandardTracerSimple ::
---      LogFormatting evt
---   => Text
---   -> (evt -> [Text])
---   -> (evt -> SeverityS)
---   -> Trace IO FormattedMessage
---   -> IO (Trace IO evt)
--- mkStandardTracerSimple name namesFor severityFor trStdout = do
---   tr <- humanFormatter True "Cardano" trStdout
---   let trNs = appendName name $ appendName "Node" tr
---   pure $ withNamesAppended namesFor
---           $ withSeverity severityFor trNs
 
 -- | Construct tracers for all system components.
 --
@@ -558,36 +540,25 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr _nodeKern _ekgDirect
 mkDispatchTracers blockConfig tOpts tr nodeKern ekgDirect _ _ _ _ _ =
   mkTracers blockConfig tOpts tr nodeKern ekgDirect
 
--- TODO JNF Code for debugging frequency limiting
-sendContinously ::
-     Double
-  -> Trace IO m
-  -> m
-  -> IO ()
-sendContinously delay tracer message = do
-  threadDelay (round (delay * 1000000.0))
-  traceWith tracer message
-  sendContinously delay tracer message
--- End of  debugging code
+-- -- TODO JNF Code for debugging frequency limiting
+-- sendContinously ::
+--      Double
+--   -> Trace IO m
+--   -> m
+--   -> IO ()
+-- sendContinously delay tracer message = do
+--   threadDelay (round (delay * 1000000.0))
+--   traceWith tracer message
+--   sendContinously delay tracer message
+-- -- End of  debugging code
 
 docTracers :: forall blk t.
   ( Show t
-  , Show (Header blk)
   , forall result. Show (Query blk result)
-  , LogFormatting (LedgerUpdate blk)
-  , LogFormatting (LedgerWarning blk)
-  , LogFormatting (ApplyTxErr blk)
-  , LogFormatting (CannotForge blk)
-  , LogFormatting (Header blk)
-  , LogFormatting (ForgeStateUpdateError blk)
+  , TraceConstraints blk
   , LogFormatting (ChainDB.InvalidBlockReason blk)
-  , LogFormatting (GenTx blk)
-  , ToJSON (GenTxId blk)
-  , HasTxId (GenTx blk)
   , LedgerSupportsProtocol blk
   , Consensus.RunNode blk
-  , HasTxs blk
-  , ConvertTxId' blk
   )
   => FilePath
   -> FilePath
@@ -811,8 +782,8 @@ docTracers configFileName outputFileName _ = do
                 trBase trForward mbTrEKG
     rsTr   <- mkCardanoTracer
                 "Resources"
-                (\ _ -> [])
-                (\ _ -> Info)
+                namesForResources
+                severityResources
                 allPublic
                 trBase trForward mbTrEKG
     biTr   <- mkCardanoTracer
@@ -861,9 +832,9 @@ docTracers configFileName outputFileName _ = do
     configureTracers trConfig docBasicInfo            [biTr]
 
     cdbmTrDoc    <- documentMarkdown
-                (docChainDBTraceEvent :: Documented
-                  (ChainDB.TraceEvent blk))
-                [cdbmTr]
+                      (docChainDBTraceEvent :: Documented
+                        (ChainDB.TraceEvent blk))
+                      [cdbmTr]
     cscTrDoc    <- documentMarkdown
                 (docChainSyncClientEvent :: Documented
                   (BlockFetch.TraceLabelPeer Peer

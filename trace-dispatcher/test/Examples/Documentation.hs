@@ -18,5 +18,5 @@ docTracer = do
   let t2 = withSeverityTraceForgeEvent
                 (appendName "node" t2')
   bl <- documentMarkdown traceForgeEventDocu [t1, t2]
-  res <- buildersToText bl
+  res <- buildersToText bl emptyTraceConfig
   T.writeFile "/home/yupanqui/IOHK/Testdocu.md" res

@@ -2,6 +2,8 @@ module Cardano.TraceDispatcher.Resources
   (
     startResourceTracer
   , docResourceStats
+  , namesForResources
+  , severityResources
   ) where
 
 
@@ -19,3 +21,9 @@ startResourceTracer tr = do
         Nothing -> pure ()
       threadDelay 1000000 -- TODO JNF:  make configurable
                                -- in microseconds
+
+namesForResources :: ResourceStats -> [Text]
+namesForResources _ = []
+
+severityResources :: ResourceStats -> SeverityS
+severityResources _ = Info

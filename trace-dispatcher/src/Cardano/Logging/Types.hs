@@ -91,11 +91,14 @@ class LogFormatting a where
 
 data Metric
   -- | An integer metric.
-  -- If the text array is not empty is appended as last elements to the namespace
+  -- If the text array is not empty it is used as namespace namespace
     = IntM Namespace Integer
   -- | A double metric.
-  -- If the text array is not empty is appended as last elements to the namespace
+  -- If the text array is not empty it is used as namespace
     | DoubleM Namespace Double
+  -- | An counter metric.
+  -- If the text array is not empty it is used as namespace namespace
+    | CounterM Namespace (Maybe Int)
   deriving (Show, Eq)
 
 -- | A helper function for creating an |Object| given a list of pairs, named items,
