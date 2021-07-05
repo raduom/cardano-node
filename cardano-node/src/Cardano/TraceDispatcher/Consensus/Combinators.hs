@@ -28,6 +28,9 @@ module Cardano.TraceDispatcher.Consensus.Combinators
   , severityMempool
   , namesForMempool
 
+  , TraceStartLeadershipCheckPlus (..)
+  , ForgeTracerType
+  , forgeTracerTransform
   , severityForge
   , namesForForge
 
@@ -42,6 +45,7 @@ module Cardano.TraceDispatcher.Consensus.Combinators
 
 import           Cardano.Logging
 import           Cardano.Prelude
+import           Cardano.TraceDispatcher.Consensus.StartLeadershipCheck
 
 import qualified Ouroboros.Network.BlockFetch.ClientState as BlockFetch
 import           Ouroboros.Network.BlockFetch.Decision
@@ -52,7 +56,8 @@ import           Ouroboros.Network.TxSubmission.Outbound
 import           Ouroboros.Consensus.Block (Point)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Util
                      (TraceBlockchainTimeEvent (..))
-import           Ouroboros.Consensus.Ledger.SupportsMempool (GenTx, GenTxId)
+import           Ouroboros.Consensus.HardFork.Combinator
+import           Ouroboros.Consensus.Ledger.SupportsMempool (GenTxId)
 import           Ouroboros.Consensus.Mempool.API (TraceEventMempool (..))
 import           Ouroboros.Consensus.MiniProtocol.BlockFetch.Server
                      (TraceBlockFetchServerEvent (..))
@@ -61,7 +66,6 @@ import           Ouroboros.Consensus.MiniProtocol.ChainSync.Server
 import           Ouroboros.Consensus.MiniProtocol.LocalTxSubmission.Server
                      (TraceLocalTxSubmissionServerEvent (..))
 import           Ouroboros.Consensus.Node.Tracers
-
 
 severityChainSyncClientEvent ::
   BlockFetch.TraceLabelPeer peer (TraceChainSyncClientEvent blk) -> SeverityS
@@ -263,47 +267,62 @@ namesForMempool :: TraceEventMempool blk -> [Text]
 -- namesForMempool TraceMempoolManuallyRemovedTxs {} = ["ManuallyRemovedTxs"]
 namesForMempool _            = []
 
-severityForge :: TraceLabelCreds (TraceForgeEvent blk) -> SeverityS
-severityForge (TraceLabelCreds _t e) = severityForge' e
+severityForge :: ForgeTracerType blk -> SeverityS
+severityForge (Left t)  = severityForge' t
+severityForge (Right t) = severityForge''' t
 
-severityForge' :: TraceForgeEvent blk -> SeverityS
-severityForge' TraceStartLeadershipCheck {}  = Info
-severityForge' TraceSlotIsImmutable {}       = Error
-severityForge' TraceBlockFromFuture {}       = Error
-severityForge' TraceBlockContext {}          = Debug
-severityForge' TraceNoLedgerState {}         = Error
-severityForge' TraceLedgerState {}           = Debug
-severityForge' TraceNoLedgerView {}          = Error
-severityForge' TraceLedgerView {}            = Debug
-severityForge' TraceForgeStateUpdateError {} = Error
-severityForge' TraceNodeCannotForge {}       = Error
-severityForge' TraceNodeNotLeader {}         = Info
-severityForge' TraceNodeIsLeader {}          = Info
-severityForge' TraceForgedBlock {}           = Info
-severityForge' TraceDidntAdoptBlock {}       = Error
-severityForge' TraceForgedInvalidBlock {}    = Error
-severityForge' TraceAdoptedBlock {}          = Info
+severityForge' :: TraceLabelCreds (TraceForgeEvent blk) -> SeverityS
+severityForge' (TraceLabelCreds _t e) = severityForge'' e
 
-namesForForge :: TraceLabelCreds (TraceForgeEvent blk) -> [Text]
-namesForForge (TraceLabelCreds _t e) = namesForForge' e
+severityForge'' :: TraceForgeEvent blk -> SeverityS
+severityForge'' TraceStartLeadershipCheck {}  = Info
+severityForge'' TraceSlotIsImmutable {}       = Error
+severityForge'' TraceBlockFromFuture {}       = Error
+severityForge'' TraceBlockContext {}          = Debug
+severityForge'' TraceNoLedgerState {}         = Error
+severityForge'' TraceLedgerState {}           = Debug
+severityForge'' TraceNoLedgerView {}          = Error
+severityForge'' TraceLedgerView {}            = Debug
+severityForge'' TraceForgeStateUpdateError {} = Error
+severityForge'' TraceNodeCannotForge {}       = Error
+severityForge'' TraceNodeNotLeader {}         = Info
+severityForge'' TraceNodeIsLeader {}          = Info
+severityForge'' TraceForgedBlock {}           = Info
+severityForge'' TraceDidntAdoptBlock {}       = Error
+severityForge'' TraceForgedInvalidBlock {}    = Error
+severityForge'' TraceAdoptedBlock {}          = Info
 
-namesForForge' :: TraceForgeEvent blk -> [Text]
-namesForForge' TraceStartLeadershipCheck {}  = ["StartLeadershipCheck"]
-namesForForge' TraceSlotIsImmutable {}       = ["SlotIsImmutable"]
-namesForForge' TraceBlockFromFuture {}       = ["BlockFromFuture"]
-namesForForge' TraceBlockContext {}          = ["BlockContext"]
-namesForForge' TraceNoLedgerState {}         = ["NoLedgerState"]
-namesForForge' TraceLedgerState {}           = ["LedgerState"]
-namesForForge' TraceNoLedgerView {}          = ["NoLedgerView"]
-namesForForge' TraceLedgerView {}            = ["LedgerView"]
-namesForForge' TraceForgeStateUpdateError {} = ["ForgeStateUpdateError"]
-namesForForge' TraceNodeCannotForge {}       = ["NodeCannotForge"]
-namesForForge' TraceNodeNotLeader {}         = ["NodeNotLeader"]
-namesForForge' TraceNodeIsLeader {}          = ["NodeIsLeader"]
-namesForForge' TraceForgedBlock {}           = ["ForgedBlock"]
-namesForForge' TraceDidntAdoptBlock {}       = ["DidntAdoptBlock"]
-namesForForge' TraceForgedInvalidBlock {}    = ["ForgedInvalidBlock"]
-namesForForge' TraceAdoptedBlock {}          = ["AdoptedBlock"]
+severityForge''' :: TraceLabelCreds TraceStartLeadershipCheckPlus -> SeverityS
+severityForge''' _ = Info
+
+namesForForge :: ForgeTracerType blk -> [Text]
+namesForForge (Left t)  = namesForForge' t
+namesForForge (Right t) = namesForForge''' t
+
+namesForForge' :: TraceLabelCreds (TraceForgeEvent blk) -> [Text]
+namesForForge' (TraceLabelCreds _t e) = namesForForge'' e
+
+namesForForge'' :: TraceForgeEvent blk -> [Text]
+namesForForge'' TraceStartLeadershipCheck {}  = ["StartLeadershipCheck"]
+namesForForge'' TraceSlotIsImmutable {}       = ["SlotIsImmutable"]
+namesForForge'' TraceBlockFromFuture {}       = ["BlockFromFuture"]
+namesForForge'' TraceBlockContext {}          = ["BlockContext"]
+namesForForge'' TraceNoLedgerState {}         = ["NoLedgerState"]
+namesForForge'' TraceLedgerState {}           = ["LedgerState"]
+namesForForge'' TraceNoLedgerView {}          = ["NoLedgerView"]
+namesForForge'' TraceLedgerView {}            = ["LedgerView"]
+namesForForge'' TraceForgeStateUpdateError {} = ["ForgeStateUpdateError"]
+namesForForge'' TraceNodeCannotForge {}       = ["NodeCannotForge"]
+namesForForge'' TraceNodeNotLeader {}         = ["NodeNotLeader"]
+namesForForge'' TraceNodeIsLeader {}          = ["NodeIsLeader"]
+namesForForge'' TraceForgedBlock {}           = ["ForgedBlock"]
+namesForForge'' TraceDidntAdoptBlock {}       = ["DidntAdoptBlock"]
+namesForForge'' TraceForgedInvalidBlock {}    = ["ForgedInvalidBlock"]
+namesForForge'' TraceAdoptedBlock {}          = ["AdoptedBlock"]
+
+namesForForge''' :: TraceLabelCreds TraceStartLeadershipCheckPlus -> [Text]
+namesForForge''' (TraceLabelCreds _ (TraceStartLeadershipCheckPlus {}))  =
+  ["StartLeadershipCheckPlus"]
 
 namesForBlockchainTime :: TraceBlockchainTimeEvent t -> [Text]
 namesForBlockchainTime TraceStartTimeInTheFuture {} = ["StartTimeInTheFuture"]

@@ -14,6 +14,8 @@ import           Cardano.BM.Tracing (ToObject)
 import           Cardano.Logging (LogFormatting)
 import           Cardano.TraceDispatcher.Consensus.Formatting (GetKESInfoX (..),
                      HasKESInfoX (..))
+import           Cardano.TraceDispatcher.Consensus.StartLeadershipCheck
+                     (LedgerQueriesX)
 import           Cardano.TraceDispatcher.Era.ConvertTxId (ConvertTxId')
 import           Cardano.Tracing.ConvertTxId (ConvertTxId)
 import           Cardano.Tracing.Metrics (HasKESInfo (..),
@@ -47,6 +49,7 @@ type TraceConstraints blk =
     , HasTxs blk
     , HasTxId (GenTx blk)
     , LedgerQueries blk
+    , LedgerQueriesX blk
     , ToJSON   (TxId (GenTx blk))
     , ToJSON   (TxOut (AlonzoEra StandardCrypto))
     , ToJSON   (PParamsUpdate (AlonzoEra StandardCrypto))

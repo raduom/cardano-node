@@ -38,6 +38,7 @@ import           Cardano.TraceDispatcher.Network.Formatting ()
 import           Cardano.TraceDispatcher.Resources (
                      startResourceTracer, namesForResources, severityResources)
 import qualified "trace-dispatcher" Control.Tracer as NT
+-- import           Cardano.TraceDispatcher.Consensus.StartLeadershipCheck
 
 
 import           Cardano.Node.Configuration.Logging (EKGDirect)
@@ -49,6 +50,7 @@ import           Cardano.Tracing.Kernel (NodeKernelData)
 import           Cardano.Tracing.OrphanInstances.Common (ToObject)
 import           Cardano.Tracing.Tracers
 import           "contra-tracer" Control.Tracer (Tracer (..))
+
 
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Util
                      (TraceBlockchainTimeEvent (..))
@@ -139,27 +141,48 @@ mkCardanoTracer :: forall evt.
   -> Trace IO FormattedMessage
   -> Maybe (Trace IO FormattedMessage)
   -> IO (Trace IO evt)
-mkCardanoTracer name namesFor severityFor privacyFor
-  trStdout trForward mbTrEkg = do
-    tr  <- withBackendsFromConfig routeAndFormat
-    tr' <- withLimitersFromConfig (contramap Message tr) (contramap Limit tr)
-    addContextAndFilter tr'
+mkCardanoTracer name namesFor severityFor privacyFor trStdout trForward mbTrEkg =
+    mkCardanoTracer' name namesFor severityFor privacyFor
+      trStdout trForward mbTrEkg noHook
+  where
+    noHook :: Trace IO evt -> IO (Trace IO evt)
+    noHook tr = pure tr
+
+-- | Adds the possibility to add special tracers via the roiuting function
+mkCardanoTracer' :: forall evt.
+     LogFormatting evt
+  => Text
+  -> (evt -> [Text])
+  -> (evt -> SeverityS)
+  -> (evt -> Privacy)
+  -> Trace IO FormattedMessage
+  -> Trace IO FormattedMessage
+  -> Maybe (Trace IO FormattedMessage)
+  -> (Trace IO evt -> IO (Trace IO evt))
+  -> IO (Trace IO evt)
+mkCardanoTracer' name namesFor severityFor privacyFor
+  trStdout trForward mbTrEkg hook = do
+    tr    <- withBackendsFromConfig backendsAndFormat
+    tr'   <- withLimitersFromConfig (contramap Message tr) (contramap Limit tr)
+    tr''  <- hook tr'
+    addContextAndFilter tr''
   where
     addContextAndFilter :: Trace IO evt -> IO (Trace IO evt)
-    addContextAndFilter t = do
-      tr'  <- filterSeverityFromConfig t
-      tr'' <- withDetailsFromConfig tr'
+    addContextAndFilter tr = do
+      tr'  <- withDetailsFromConfig tr
+      tr'' <- filterSeverityFromConfig tr'
       pure $ withNamesAppended namesFor
             $ appendName name
               $ appendName "Node"
                 $ withSeverity severityFor
                   $ withPrivacy privacyFor
                     tr''
-    routeAndFormat ::
+
+    backendsAndFormat ::
          Maybe [BackendConfig]
       -> Trace m x
       -> IO (Trace IO (MessageOrLimit evt))
-    routeAndFormat mbBackends _ =
+    backendsAndFormat mbBackends _ =
       let backends = case mbBackends of
                         Just b -> b
                         Nothing -> [EKGBackend, Forwarder, Stdout HumanFormatColoured]
@@ -215,7 +238,7 @@ mkDispatchTracers
   -> TraceConfig
   -> [BasicInfo]
   -> IO (Tracers peer localPeer blk)
-mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr _nodeKern _ekgDirect
+mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr nodeKernel _ekgDirect
   trBase trForward mbTrEKG trConfig basicInfos = do
     trace ("TraceConfig " <> show trConfig) $ pure ()
     cdbmTr <- mkCardanoTracer
@@ -290,12 +313,13 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr _nodeKern _ekgDirect
                 severityMempool
                 allPublic
                 trBase trForward mbTrEKG
-    fTr    <- mkCardanoTracer
+    fTr    <- mkCardanoTracer'
                 "Forge"
                 namesForForge
                 severityForge
                 allPublic
                 trBase trForward mbTrEKG
+                (forgeTracerTransform nodeKernel)
     btTr   <- mkCardanoTracer
                 "BlockchainTime"
                 namesForBlockchainTime
@@ -506,7 +530,7 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr _nodeKern _ekgDirect
         , Consensus.txOutboundTracer = Tracer (traceWith txoTr)
         , Consensus.localTxSubmissionServerTracer = Tracer (traceWith ltxsTr)
         , Consensus.mempoolTracer = Tracer (traceWith mpTr)
-        , Consensus.forgeTracer = Tracer (traceWith fTr)
+        , Consensus.forgeTracer = Tracer (traceWith (contramap Left fTr))
         , Consensus.blockchainTimeTracer = Tracer (traceWith btTr)
         , Consensus.keepAliveClientTracer = Tracer (traceWith kacTr)
         }
@@ -884,7 +908,7 @@ docTracers configFileName outputFileName _ = do
                 [mpTr]
     fTrDoc    <- documentMarkdown
                 (docForge :: Documented
-                  (Consensus.TraceLabelCreds (Consensus.TraceForgeEvent blk)))
+                  (ForgeTracerType blk))
                 [fTr]
     btTrDoc   <- documentMarkdown
                 (docBlockchainTime :: Documented

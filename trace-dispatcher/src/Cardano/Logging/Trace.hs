@@ -248,11 +248,14 @@ foldMTraceM cata initial (Trace tr) = do
 --   The second argument must mappend all possible tracers of the first
 --   argument to one tracer. This is required for the configuration!
 routingTrace
-  :: forall m a . Monad m
-  => (a -> Trace m a)
+  :: forall m a. Monad m
+  => (a -> m (Trace m a))
   -> Trace m a
-  -> Trace m a
-routingTrace rf rc = Trace $ T.arrow $ T.emit $
+  -> m (Trace m a)
+routingTrace rf rc = pure $ Trace $ T.arrow $ T.emit $
     \case
-    (lc, Nothing, a) -> T.traceWith (unpackTrace (rf a)) (lc, Nothing, a)
-    (lc, Just control, a) -> T.traceWith (unpackTrace rc) (lc, Just control, a)
+      (lc, Nothing, a) -> do
+          nt <- rf a
+          T.traceWith (unpackTrace nt) (lc, Nothing, a)
+      (lc, Just control, a) ->
+          T.traceWith (unpackTrace rc) (lc, Just control, a)

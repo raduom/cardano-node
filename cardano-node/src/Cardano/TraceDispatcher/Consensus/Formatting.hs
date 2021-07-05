@@ -2,10 +2,12 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE LambdaCase           #-}
 {-# LANGUAGE NamedFieldPuns       #-}
+{-# LANGUAGE RecordWildCards      #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
+
 
 {-# OPTIONS_GHC -Wno-orphans  #-}
 
@@ -16,7 +18,7 @@ module Cardano.TraceDispatcher.Consensus.Formatting
   ) where
 
 import           Control.Monad.Class.MonadTime (Time (..))
-import           Data.Aeson (ToJSON, Value (String), toJSON, (.=))
+import           Data.Aeson (ToJSON, Value (Number, String), toJSON, (.=))
 import           Data.SOP.Strict
 import qualified Data.Text as Text
 import           Data.Time (DiffTime)
@@ -24,6 +26,8 @@ import           Text.Show
 
 import           Cardano.Logging
 import           Cardano.Prelude hiding (All, Show, show)
+import           Cardano.TraceDispatcher.Consensus.Combinators (ForgeTracerType,
+                     TraceStartLeadershipCheckPlus (..))
 import           Cardano.TraceDispatcher.Era.Byron ()
 import           Cardano.TraceDispatcher.Era.Shelley ()
 import           Cardano.TraceDispatcher.Formatting ()
@@ -199,6 +203,7 @@ instance ConvertRawHash blk
       mkObject [ "kind" .= String "ChainSyncRollBackward"
                , "point" .= forMachine dtal point
                ]
+
   asMetrics (TraceChainSyncRollForward _point) =
       [CounterM ["ChainSync","RollForward"] Nothing]
   asMetrics _ = []
@@ -251,9 +256,11 @@ instance LogFormatting (BlockFetch.TraceFetchClientState header) where
     mkObject [ "kind" .= String "ClientTerminating" ]
 
 instance LogFormatting (TraceBlockFetchServerEvent blk) where
-  forMachine _dtal _ =
+  forMachine _dtal (TraceBlockFetchServerSendBlock _p) =
     mkObject [ "kind" .= String "BlockFetchServer" ]
-  asMetrics _ = [CounterM ["served","block","count"] Nothing]
+
+  asMetrics (TraceBlockFetchServerSendBlock _p) =
+    [CounterM ["served","block","count"] Nothing]
 
 instance LogFormatting (TraceTxSubmissionInbound txid tx) where
   forMachine _dtal (TraceTxSubmissionCollected count) =
@@ -281,6 +288,7 @@ instance LogFormatting (TraceTxSubmissionInbound txid tx) where
       [ "kind" .= String "TraceTxInboundCannotRequestMoreTxs"
       , "count" .= toJSON count
       ]
+
   asMetrics (TraceTxSubmissionCollected count)=
     [CounterM ["submissions", "submitted", "count"] (Just count)]
   asMetrics (TraceTxSubmissionProcessed processed) =
@@ -353,6 +361,7 @@ instance
       , "txsInvalidated" .= map (forMachine dtal . txForgetValidated) txs1
       , "mempoolSize" .= forMachine dtal mpSz
       ]
+
   asMetrics (TraceMempoolAddedTx _tx _mpSzBefore mpSz) =
     [ IntM ["txsInMempool"] (fromIntegral $ msNumTxs mpSz)
     , IntM ["mempoolBytes"] (fromIntegral $ msNumBytes mpSz)
@@ -381,6 +390,26 @@ instance LogFormatting MempoolSize where
       [ "numTxs" .= msNumTxs
       , "bytes" .= msNumBytes
       ]
+
+instance ( tx ~ GenTx blk
+         , ConvertRawHash blk
+         , GetHeader blk
+         , HasHeader blk
+         , HasKESInfoX blk
+         , LedgerSupportsProtocol blk
+         , SerialiseNodeToNodeConstraints blk
+         , Show (ForgeStateUpdateError blk)
+         , Show (CannotForge blk)
+         , LogFormatting (InvalidBlockReason blk)
+         , LogFormatting (CannotForge blk)
+         , LogFormatting (ForgeStateUpdateError blk))
+         => LogFormatting (ForgeTracerType blk) where
+  forMachine dtal (Left i)  = forMachine dtal i
+  forMachine dtal (Right i) = forMachine dtal i
+  forHuman (Left i)  = forHuman i
+  forHuman (Right i) = forHuman i
+  asMetrics (Left i)  = asMetrics i
+  asMetrics (Right i) = asMetrics i
 
 instance ( tx ~ GenTx blk
          , ConvertRawHash blk
@@ -558,25 +587,74 @@ instance ( tx ~ GenTx blk
         <> ": " <> renderHeaderHash (Proxy @blk) (blockHash blk)
       --  <> ", TxIds: " <> showT (map txId txs) TODO Fix
 
-  asMetrics (TraceForgeStateUpdateError _ reason) =
-    case getKESInfoX (Proxy @blk) reason of
-      Nothing -> []
-      Just kesInfo ->
-        [ IntM
-            ["operationalCertificateStartKESPeriod"]
-            (fromIntegral . unKESPeriod . HotKey.kesStartPeriod $ kesInfo)
-        , IntM
-            ["operationalCertificateExpiryKESPeriod"]
-            (fromIntegral . unKESPeriod . HotKey.kesEndPeriod $ kesInfo)
-        , IntM
-            ["currentKESPeriod"]
-            0
-        , IntM
-            ["remainingKESPeriods"]
-            0
-        ]
-  asMetrics _ = []
+  asMetrics (TraceForgeStateUpdateError slot reason) =
+    IntM ["forgeStateUpdateError"] (fromIntegral $ unSlotNo slot) :
+      (case getKESInfoX (Proxy @blk) reason of
+        Nothing -> []
+        Just kesInfo ->
+          [ IntM
+              ["operationalCertificateStartKESPeriod"]
+              (fromIntegral . unKESPeriod . HotKey.kesStartPeriod $ kesInfo)
+          , IntM
+              ["operationalCertificateExpiryKESPeriod"]
+              (fromIntegral . unKESPeriod . HotKey.kesEndPeriod $ kesInfo)
+          , IntM
+              ["currentKESPeriod"]
+              0
+          , IntM
+              ["remainingKESPeriods"]
+              0
+          ])
 
+  asMetrics (TraceStartLeadershipCheck slot) =
+    [IntM ["aboutToLeadSlotLast"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceSlotIsImmutable slot _tipPoint _tipBlkNo) =
+    [IntM ["slotIsImmutable"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceBlockFromFuture slot _slotNo) =
+    [IntM ["blockFromFuture"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceBlockContext slot _tipBlkNo _tipPoint) =
+    [IntM ["blockContext"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceNoLedgerState slot _) =
+    [IntM ["couldNotForgeSlotLast"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceLedgerState slot _) =
+    [IntM ["ledgerState"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceNoLedgerView slot _) =
+    [IntM ["couldNotForgeSlotLast"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceLedgerView slot) =
+    [IntM ["ledgerView"] (fromIntegral $ unSlotNo slot)]
+  -- see above
+  asMetrics (TraceNodeCannotForge slot _reason) =
+    [IntM ["nodeCannotForge"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceNodeNotLeader slot) =
+    [IntM ["nodeNotLeader"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceNodeIsLeader slot) =
+    [IntM ["nodeIsLeader"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceForgedBlock slot _ _ _) =
+    [IntM ["forgedSlotLast"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceDidntAdoptBlock slot _) =
+    [IntM ["notAdoptedSlotLast"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceForgedInvalidBlock slot _ _) =
+    [IntM ["forgedInvalidSlotLast"] (fromIntegral $ unSlotNo slot)]
+  asMetrics (TraceAdoptedBlock slot _ _) =
+    [IntM ["adoptedSlotLast"] (fromIntegral $ unSlotNo slot)]
+
+instance LogFormatting TraceStartLeadershipCheckPlus where
+  forMachine _dtal TraceStartLeadershipCheckPlus {..} =
+        mkObject [ "kind" .= String "TraceStartLeadershipCheckPlus"
+                 , "slotNo" .= toJSON (unSlotNo tsSlotNo)
+                 , "utxoSize" .= Number (fromIntegral tsUtxoSize)
+                 , "delegMapSize" .= Number (fromIntegral tsUtxoSize)
+                 , "chainDensity" .= Number (fromRational (toRational tsChainDensity))
+                 ]
+  forHuman TraceStartLeadershipCheckPlus {..} =
+      "Checking for leadership in slot " <> showT (unSlotNo tsSlotNo)
+      <> " utxoSize " <> showT tsUtxoSize
+      <> " delegMapSize " <> showT tsDelegMapSize
+      <> " chainDensity " <> showT tsChainDensity
+  asMetrics TraceStartLeadershipCheckPlus {..} =
+    [IntM ["utxoSize"] (fromIntegral tsUtxoSize),
+     IntM ["delegMapSize"] (fromIntegral tsDelegMapSize)]
+     -- TODO JNF: Why not deleg map size?
 
 instance Show t => LogFormatting (TraceBlockchainTimeEvent t) where
     forMachine _dtal (TraceStartTimeInTheFuture (SystemStart start) toWait) =
