@@ -1,4 +1,3 @@
-
 {-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -30,13 +29,15 @@ import           Cardano.TraceDispatcher.ChainDB.Combinators
 import           Cardano.TraceDispatcher.ChainDB.Docu
 import           Cardano.TraceDispatcher.Consensus.Combinators
 import           Cardano.TraceDispatcher.Consensus.Docu
+import           Cardano.TraceDispatcher.Consensus.ForgingThreadStats
+                     (docForgeStats, forgeThreadStats)
 import           Cardano.TraceDispatcher.Consensus.StateInfo
 import           Cardano.TraceDispatcher.Formatting ()
 import           Cardano.TraceDispatcher.Network.Combinators
 import           Cardano.TraceDispatcher.Network.Docu
 import           Cardano.TraceDispatcher.Network.Formatting ()
-import           Cardano.TraceDispatcher.Resources (
-                     startResourceTracer, namesForResources, severityResources)
+import           Cardano.TraceDispatcher.Resources (namesForResources,
+                     severityResources, startResourceTracer)
 import qualified "trace-dispatcher" Control.Tracer as NT
 -- import           Cardano.TraceDispatcher.Consensus.StartLeadershipCheck
 
@@ -149,8 +150,8 @@ mkCardanoTracer name namesFor severityFor privacyFor trStdout trForward mbTrEkg 
     noHook tr = pure tr
 
 -- | Adds the possibility to add special tracers via the roiuting function
-mkCardanoTracer' :: forall evt.
-     LogFormatting evt
+mkCardanoTracer' :: forall evt evt1.
+  (  LogFormatting evt1)
   => Text
   -> (evt -> [Text])
   -> (evt -> SeverityS)
@@ -158,7 +159,7 @@ mkCardanoTracer' :: forall evt.
   -> Trace IO FormattedMessage
   -> Trace IO FormattedMessage
   -> Maybe (Trace IO FormattedMessage)
-  -> (Trace IO evt -> IO (Trace IO evt))
+  -> (Trace IO evt1 -> IO (Trace IO evt))
   -> IO (Trace IO evt)
 mkCardanoTracer' name namesFor severityFor privacyFor
   trStdout trForward mbTrEkg hook = do
@@ -181,7 +182,7 @@ mkCardanoTracer' name namesFor severityFor privacyFor
     backendsAndFormat ::
          Maybe [BackendConfig]
       -> Trace m x
-      -> IO (Trace IO (MessageOrLimit evt))
+      -> IO (Trace IO (MessageOrLimit evt1))
     backendsAndFormat mbBackends _ =
       let backends = case mbBackends of
                         Just b -> b
@@ -320,6 +321,13 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr nodeKernel _ekgDirec
                 allPublic
                 trBase trForward mbTrEKG
                 (forgeTracerTransform nodeKernel)
+    fSttTr <- mkCardanoTracer'
+                "ForgeStats"
+                namesForForge
+                severityForge
+                allPublic
+                trBase trForward mbTrEKG
+                forgeThreadStats
     btTr   <- mkCardanoTracer
                 "BlockchainTime"
                 namesForBlockchainTime
@@ -478,7 +486,9 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr nodeKernel _ekgDirec
     configureTracers trConfig docLocalTxSubmissionServer [ltxsTr]
     configureTracers trConfig docMempool              [mpTr]
     configureTracers trConfig docForge                [fTr]
+    configureTracers trConfig docForgeStats           [fSttTr]
     configureTracers trConfig docBlockchainTime       [btTr]
+
     configureTracers trConfig docKeepAliveClient      [kacTr]
     configureTracers trConfig docTChainSync           [tcsTr]
     configureTracers trConfig docTTxSubmission        [ttsTr]
@@ -530,7 +540,9 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr nodeKernel _ekgDirec
         , Consensus.txOutboundTracer = Tracer (traceWith txoTr)
         , Consensus.localTxSubmissionServerTracer = Tracer (traceWith ltxsTr)
         , Consensus.mempoolTracer = Tracer (traceWith mpTr)
-        , Consensus.forgeTracer = Tracer (traceWith (contramap Left fTr))
+        , Consensus.forgeTracer =
+            Tracer (traceWith (contramap Left fTr))
+            <> Tracer (traceWith (contramap Left fSttTr))
         , Consensus.blockchainTimeTracer = Tracer (traceWith btTr)
         , Consensus.keepAliveClientTracer = Tracer (traceWith kacTr)
         }
