@@ -1,9 +1,11 @@
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE NamedFieldPuns       #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
+
 
 {-# OPTIONS_GHC -Wno-orphans  #-}
 
@@ -20,9 +22,9 @@ import           Text.Show
 
 import           Cardano.Logging
 import           Cardano.Prelude hiding (Show, show)
-import           Cardano.TraceDispatcher.Formatting ()
 import           Cardano.TraceDispatcher.Era.Byron ()
 import           Cardano.TraceDispatcher.Era.Shelley ()
+import           Cardano.TraceDispatcher.Formatting ()
 import           Cardano.TraceDispatcher.Render
 
 import           Ouroboros.Consensus.Block
@@ -271,6 +273,83 @@ instance ( LogFormatting (Header blk)
   forMachine dtal (ChainDB.ChainSelectionForFutureBlock pt) =
       mkObject [ "kind" .= String "TChainSelectionForFutureBlock"
                , "block" .= forMachine dtal pt ]
+
+  asMetrics (ChainDB.SwitchedToAFork _warnings newTipInfo _oldChain newChain) =
+    let ChainInformation { slots, blocks, density, epoch, slotInEpoch } =
+          chainInformation newTipInfo newChain 0
+    in  [ DoubleM ["density"] (fromRational density)
+        , IntM    ["slotNum"] (fromIntegral slots)
+        , IntM    ["blockNum"] (fromIntegral blocks)
+        , IntM    ["slotInEpoch"] (fromIntegral slotInEpoch)
+        , IntM    ["epoch"] (fromIntegral (unEpochNo epoch))
+        ]
+  asMetrics (ChainDB.AddedToCurrentChain _warnings newTipInfo _oldChain newChain) =
+    let ChainInformation { slots, blocks, density, epoch, slotInEpoch } =
+          chainInformation newTipInfo newChain 0
+    in  [ DoubleM ["density"] (fromRational density)
+        , IntM    ["slotNum"] (fromIntegral slots)
+        , IntM    ["blockNum"] (fromIntegral blocks)
+        , IntM    ["slotInEpoch"] (fromIntegral slotInEpoch)
+        , IntM    ["epoch"] (fromIntegral (unEpochNo epoch))
+        ]
+  asMetrics _ = []
+
+data ChainInformation = ChainInformation
+  { slots                :: Word64
+  , blocks               :: Word64
+  , density              :: Rational
+    -- ^ the actual number of blocks created over the maximum expected number
+    -- of blocks that could be created over the span of the last @k@ blocks.
+  , epoch                :: EpochNo
+    -- ^ In which epoch is the tip of the current chain
+  , slotInEpoch          :: Word64
+    -- ^ Relative slot number of the tip of the current chain within the
+    -- epoch.
+  , blocksUncoupledDelta :: Int64
+    -- ^ The net change in number of blocks forged since last restart not on the
+    -- current chain.
+  }
+
+chainInformation
+  :: forall blk. HasHeader (Header blk)
+  => ChainDB.NewTipInfo blk
+  -> AF.AnchoredFragment (Header blk)
+  -> Int64
+  -> ChainInformation
+chainInformation newTipInfo frag blocksUncoupledDelta = ChainInformation
+    { slots = unSlotNo $ fromWithOrigin 0 (AF.headSlot frag)
+    , blocks = unBlockNo $ fromWithOrigin (BlockNo 1) (AF.headBlockNo frag)
+    , density = fragmentChainDensity frag
+    , epoch = ChainDB.newTipEpoch newTipInfo
+    , slotInEpoch = ChainDB.newTipSlotInEpoch newTipInfo
+    , blocksUncoupledDelta = blocksUncoupledDelta
+    }
+
+fragmentChainDensity ::
+  HasHeader (Header blk)
+  => AF.AnchoredFragment (Header blk) -> Rational
+fragmentChainDensity frag = calcDensity blockD slotD
+  where
+    calcDensity :: Word64 -> Word64 -> Rational
+    calcDensity bl sl
+      | sl > 0 = toRational bl / toRational sl
+      | otherwise = 0
+    slotN  = unSlotNo $ fromWithOrigin 0 (AF.headSlot frag)
+    -- Slot of the tip - slot @k@ blocks back. Use 0 as the slot for genesis
+    -- includes EBBs
+    slotD   = slotN
+            - unSlotNo (fromWithOrigin 0 (AF.lastSlot frag))
+    -- Block numbers start at 1. We ignore the genesis EBB, which has block number 0.
+    blockD = blockN - firstBlock
+    blockN = unBlockNo $ fromWithOrigin (BlockNo 1) (AF.headBlockNo frag)
+    firstBlock = case unBlockNo . blockNo <$> AF.last frag of
+      -- Empty fragment, no blocks. We have that @blocks = 1 - 1 = 0@
+      Left _  -> 1
+      -- The oldest block is the genesis EBB with block number 0,
+      -- don't let it contribute to the number of blocks
+      Right 0 -> 1
+      Right b -> b
+
 
 instance ( HasHeader (Header blk)
          , LedgerSupportsProtocol blk

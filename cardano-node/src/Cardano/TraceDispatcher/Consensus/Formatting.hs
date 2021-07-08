@@ -703,4 +703,4 @@ instance Show remotePeer => LogFormatting (TraceKeepAliveClient remotePeer) wher
           dTime :: Time -> Double
           dTime (Time d) = realToFrac d
 
-    forHuman tr = showT tr
+    forHuman msg = showT msg

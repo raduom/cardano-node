@@ -52,9 +52,10 @@ import           Cardano.Tracing.OrphanInstances.Common (ToObject)
 import           Cardano.Tracing.Tracers
 import           "contra-tracer" Control.Tracer (Tracer (..))
 
-
+import           Ouroboros.Consensus.Block.Forging
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Util
                      (TraceBlockchainTimeEvent (..))
+import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import           Ouroboros.Consensus.Byron.Ledger.Config (BlockConfig)
 import           Ouroboros.Consensus.Ledger.Query (Query)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx,
@@ -78,6 +79,7 @@ import           Ouroboros.Consensus.Shelley.Ledger.Block
 import qualified Ouroboros.Consensus.Shelley.Protocol.HotKey as HotKey
 import qualified Ouroboros.Consensus.Storage.ChainDB as ChainDB
 import           Ouroboros.Consensus.Storage.Serialisation (SerialisedHeader)
+
 
 import           Ouroboros.Network.Block (Point (..), Serialised, Tip)
 import qualified Ouroboros.Network.BlockFetch.ClientState as BlockFetch
@@ -485,8 +487,7 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr nodeKernel _ekgDirec
     configureTracers trConfig docTxOutbound           [txoTr]
     configureTracers trConfig docLocalTxSubmissionServer [ltxsTr]
     configureTracers trConfig docMempool              [mpTr]
-    configureTracers trConfig docForge                [fTr]
-    configureTracers trConfig docForgeStats           [fSttTr]
+    configureTracers trConfig docForge                [fTr, fSttTr]
     configureTracers trConfig docBlockchainTime       [btTr]
 
     configureTracers trConfig docKeepAliveClient      [kacTr]
@@ -684,6 +685,13 @@ docTracers configFileName outputFileName _ = do
                 severityForge
                 allPublic
                 trBase trForward mbTrEKG
+    fSttTr <- mkCardanoTracer'
+                "ForgeStats"
+                namesForForge
+                severityForge
+                allPublic
+                trBase trForward mbTrEKG
+                forgeThreadStats
     btTr   <- mkCardanoTracer
                 "BlockchainTime"
                 namesForBlockchainTime
@@ -841,7 +849,7 @@ docTracers configFileName outputFileName _ = do
     configureTracers trConfig docTxOutbound           [txoTr]
     configureTracers trConfig docLocalTxSubmissionServer [ltxsTr]
     configureTracers trConfig docMempool              [mpTr]
-    configureTracers trConfig docForge                [fTr]
+    configureTracers trConfig docForge                [fTr, fSttTr]
     configureTracers trConfig docBlockchainTime       [btTr]
     configureTracers trConfig docKeepAliveClient      [kacTr]
     configureTracers trConfig docTChainSync           [tcsTr]
@@ -921,7 +929,7 @@ docTracers configFileName outputFileName _ = do
     fTrDoc    <- documentMarkdown
                 (docForge :: Documented
                   (ForgeTracerType blk))
-                [fTr]
+                [fTr, fSttTr]
     btTrDoc   <- documentMarkdown
                 (docBlockchainTime :: Documented
                   (TraceBlockchainTimeEvent t))
@@ -1040,11 +1048,11 @@ docTracers configFileName outputFileName _ = do
             ++ bfdTrDoc
             ++ bfcTrDoc
             ++ bfsTrDoc
-            ++ fsiTrDoc
+--            ++ fsiTrDoc
             ++ txiTrDoc
             ++ txoTrDoc
             ++ ltxsTrDoc
-            ++ mpTrDoc
+--            ++ mpTrDoc
             ++ fTrDoc
             ++ btTrDoc
             ++ kacTrDoc

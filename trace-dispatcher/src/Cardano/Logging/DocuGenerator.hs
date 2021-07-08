@@ -134,7 +134,6 @@ documentMarkdown (Documented documented) tracers = do
     namespacesBuilder []   = fromText "__Warning__: Namespace missing"
     namespacesBuilder nsl  =
       mconcat (intersperse (singleton '\n')(map namespaceBuilder nsl))
-        <> fromText "Warning: Mutiple Namespaces"
 
     namespaceBuilder :: Namespace -> Builder
     namespaceBuilder ns = fromText "### " <>

@@ -164,7 +164,7 @@ protoInvalidBlockReason :: InvalidBlockReason blk
 protoInvalidBlockReason = undefined
 
 protoKESInfo :: HotKey.KESInfo
-protoKESInfo = undefined
+protoKESInfo = HotKey.KESInfo undefined undefined undefined
 
 protoUTCTime :: UTCTime
 protoUTCTime = UTCTime (fromOrdinalDate 2021 100) protoDiffTime

@@ -23,6 +23,7 @@ import           Cardano.TraceDispatcher.Render (showT)
 import           Ouroboros.Consensus.Node.Tracers
 import           Ouroboros.Consensus.Shelley.Node ()
 
+
 -- | Per-forging-thread statistics.
 data ForgeThreadStats = ForgeThreadStats
   { ftsNodeCannotForgeNum :: !Int
@@ -38,6 +39,30 @@ data ForgeThreadStats = ForgeThreadStats
     -- occuring since node start, for it is a sum total for all threads.
   , ftsLastSlot           :: !Int
   }
+
+instance LogFormatting ForgeThreadStats where
+  forHuman ForgeThreadStats {..} =
+    "Node cannot forge "  <> showT ftsNodeCannotForgeNum
+    <> " node is leader " <> showT ftsNodeIsLeaderNum
+    <> " blocks forged "  <> showT ftsBlocksForgedNum
+    <> " slots missed "   <> showT ftsSlotsMissedNum
+    <> " last slot "      <> showT ftsLastSlot
+  forMachine _dtal ForgeThreadStats {..} =
+    mkObject [ "kind" .= String "ForgeThreadStats"
+             , "nodeCannotForgeNum" .= String (show ftsNodeCannotForgeNum)
+             , "nodeIsLeaderNum"    .= String (show ftsNodeIsLeaderNum)
+             , "blocksForgedNum"    .= String (show ftsBlocksForgedNum)
+             , "slotsMissed"        .= String (show ftsSlotsMissedNum)
+             , "lastSlot"           .= String (show ftsLastSlot)
+             ]
+  asMetrics ForgeThreadStats {..} =
+    [ IntM ["nodeCannotForgeNum"] (fromIntegral ftsNodeCannotForgeNum)
+    , IntM ["nodeIsLeaderNum"]    (fromIntegral ftsNodeIsLeaderNum)
+    , IntM ["blocksForgedNum"]    (fromIntegral ftsBlocksForgedNum)
+    , IntM ["slotsMissed"]        (fromIntegral ftsSlotsMissedNum)
+    , IntM ["lastSlot"]           (fromIntegral ftsLastSlot)
+    ]
+
 
 emptyForgeThreadStats :: ForgeThreadStats
 emptyForgeThreadStats = ForgeThreadStats 0 0 0 0 0
@@ -71,29 +96,6 @@ instance LogFormatting ForgingStats where
     , IntM ["nodeIsLeaderNum"]    (fromIntegral fsNodeIsLeaderNum)
     , IntM ["blocksForgedNum"]    (fromIntegral fsBlocksForgedNum)
     , IntM ["slotsMissed"]        (fromIntegral fsSlotsMissedNum)
-    ]
-
-instance LogFormatting ForgeThreadStats where
-  forHuman ForgeThreadStats {..} =
-    "Node cannot forge "  <> showT ftsNodeCannotForgeNum
-    <> " node is leader " <> showT ftsNodeIsLeaderNum
-    <> " blocks forged "  <> showT ftsBlocksForgedNum
-    <> " slots missed "   <> showT ftsSlotsMissedNum
-    <> " last slot "      <> showT ftsLastSlot
-  forMachine _dtal ForgeThreadStats {..} =
-    mkObject [ "kind" .= String "ForgeThreadStats"
-             , "nodeCannotForgeNum" .= String (show ftsNodeCannotForgeNum)
-             , "nodeIsLeaderNum"    .= String (show ftsNodeIsLeaderNum)
-             , "blocksForgedNum"    .= String (show ftsBlocksForgedNum)
-             , "slotsMissed"        .= String (show ftsSlotsMissedNum)
-             , "lastSlot"           .= String (show ftsLastSlot)
-             ]
-  asMetrics ForgeThreadStats {..} =
-    [ IntM ["nodeCannotForgeNum"] (fromIntegral ftsNodeCannotForgeNum)
-    , IntM ["nodeIsLeaderNum"]    (fromIntegral ftsNodeIsLeaderNum)
-    , IntM ["blocksForgedNum"]    (fromIntegral ftsBlocksForgedNum)
-    , IntM ["slotsMissed"]        (fromIntegral ftsSlotsMissedNum)
-    , IntM ["lastSlot"]           (fromIntegral ftsLastSlot)
     ]
 
 emptyForgingStats :: ForgingStats
@@ -149,12 +151,6 @@ calculateThreadStats stats _context
                               fsSlotsMissedNum fs + missed}))
 calculateThreadStats stats _context _message = pure stats
 
-docForgeStats :: Documented (ForgeTracerType blk0)
-docForgeStats = Documented [
-  --TODO JNF
-  ]
-
-
 mapThreadStats ::
      MonadIO m
   => ForgingStats
@@ -163,8 +159,13 @@ mapThreadStats ::
   -> m ForgingStats
 mapThreadStats fs@ForgingStats { fsStats } f1 f2 = do
   tid <- liftIO $ myThreadId
-  let varStats = case Map.lookup tid fsStats of
-                    Nothing       -> ForgeThreadStats 0 0 0 0 0
-                    Just vs       -> vs
-      (newStats, waving) = f1 varStats
-  pure $ f2 (fs {fsStats = Map.insert tid newStats fsStats}) waving
+  let threadStats   = case Map.lookup tid fsStats of
+                        Nothing       -> emptyForgeThreadStats
+                        Just vs       -> vs
+      (newStats, w) = f1 threadStats
+  pure $ f2 (fs {fsStats = Map.insert tid newStats fsStats}) w
+
+docForgeStats :: Documented (ForgeTracerType blk0)
+docForgeStats = Documented [
+  --TODO JNF
+  ]
