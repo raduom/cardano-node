@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 
--- {-# OPTIONS_GHC -Wno-unused-imports  #-}
+{-# OPTIONS_GHC -Wno-unused-imports  #-}
 {-# OPTIONS_GHC -Wno-deprecations  #-}
 
 
@@ -35,6 +35,7 @@ import           Cardano.TraceDispatcher.Consensus.StateInfo
 import           Cardano.TraceDispatcher.Formatting ()
 import           Cardano.TraceDispatcher.Network.Combinators
 import           Cardano.TraceDispatcher.Network.Docu
+import           Cardano.TraceDispatcher.Peer
 import           Cardano.TraceDispatcher.Network.Formatting ()
 import           Cardano.TraceDispatcher.Resources (namesForResources,
                      severityResources, startResourceTracer)
@@ -474,6 +475,12 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr nodeKernel _ekgDirec
                 severityBasicInfo
                 allPublic
                 trBase trForward mbTrEKG
+    pTr   <- mkCardanoTracer
+                "Peers"
+                namesForPeers
+                severityPeers
+                allPublic
+                trBase trForward mbTrEKG
 
     configureTracers trConfig docChainDBTraceEvent    [cdbmTr]
     configureTracers trConfig docChainSyncClientEvent [cscTr]
@@ -489,7 +496,6 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr nodeKernel _ekgDirec
     configureTracers trConfig docMempool              [mpTr]
     configureTracers trConfig docForge                [fTr, fSttTr]
     configureTracers trConfig docBlockchainTime       [btTr]
-
     configureTracers trConfig docKeepAliveClient      [kacTr]
     configureTracers trConfig docTChainSync           [tcsTr]
     configureTracers trConfig docTTxSubmission        [ttsTr]
@@ -513,6 +519,7 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr nodeKernel _ekgDirec
     configureTracers trConfig docDiffusionInit        [diTr]
     configureTracers trConfig docResourceStats        [rsTr]
     configureTracers trConfig docBasicInfo            [biTr]
+    configureTracers trConfig docPeers                [pTr]
 
 -- -- TODO JNF Code for debugging frequency limiting
 --     void . forkIO $
@@ -525,6 +532,7 @@ mkDispatchTracers _blockConfig (TraceDispatcher _trSel) _tr nodeKernel _ekgDirec
 
     mapM_ (traceWith biTr) basicInfos
     startResourceTracer rsTr
+    startPeerTracer pTr nodeKernel
 
     pure Tracers
       { chainDBTracer = Tracer (traceWith cdbmTr)
@@ -673,12 +681,12 @@ docTracers configFileName outputFileName _ = do
                 severityLocalTxSubmissionServer
                 allPublic
                 trBase trForward mbTrEKG
-    mpTr   <- mkCardanoTracer
-                "Mempool"
-                namesForMempool
-                severityMempool
-                allPublic
-                trBase trForward mbTrEKG
+    -- mpTr   <- mkCardanoTracer
+    --             "Mempool"
+    --             namesForMempool
+    --             severityMempool
+    --             allPublic
+    --             trBase trForward mbTrEKG
     fTr    <- mkCardanoTracer
                 "Forge"
                 namesForForge
@@ -848,7 +856,7 @@ docTracers configFileName outputFileName _ = do
     configureTracers trConfig docTxInbound            [txiTr]
     configureTracers trConfig docTxOutbound           [txoTr]
     configureTracers trConfig docLocalTxSubmissionServer [ltxsTr]
-    configureTracers trConfig docMempool              [mpTr]
+--    configureTracers trConfig docMempool              [mpTr]
     configureTracers trConfig docForge                [fTr, fSttTr]
     configureTracers trConfig docBlockchainTime       [btTr]
     configureTracers trConfig docKeepAliveClient      [kacTr]
@@ -904,10 +912,10 @@ docTracers configFileName outputFileName _ = do
                 (docBlockFetchServer :: Documented
                   (TraceBlockFetchServerEvent blk))
                 [bfsTr]
-    fsiTrDoc    <- documentMarkdown
-                (docForgeStateInfo :: Documented
-                  (Consensus.TraceLabelCreds HotKey.KESInfo))
-                [fsiTr]
+    -- fsiTrDoc    <- documentMarkdown
+    --             (docForgeStateInfo :: Documented
+    --               (Consensus.TraceLabelCreds HotKey.KESInfo))
+    --             [fsiTr]
     txiTrDoc    <- documentMarkdown
                 (docTxInbound :: Documented
                   (BlockFetch.TraceLabelPeer Peer
@@ -922,10 +930,10 @@ docTracers configFileName outputFileName _ = do
                 (docLocalTxSubmissionServer :: Documented
                   (TraceLocalTxSubmissionServerEvent blk))
                 [ltxsTr]
-    mpTrDoc    <- documentMarkdown
-                (docMempool :: Documented
-                  (TraceEventMempool blk))
-                [mpTr]
+    -- mpTrDoc    <- documentMarkdown
+    --             (docMempool :: Documented
+    --               (TraceEventMempool blk))
+    --             [mpTr]
     fTrDoc    <- documentMarkdown
                 (docForge :: Documented
                   (ForgeTracerType blk))

@@ -91,6 +91,7 @@ library
                        Cardano.TraceDispatcher.Resources
                        Cardano.TraceDispatcher.BasicInfo.Types
                        Cardano.TraceDispatcher.BasicInfo.Combinators
+                       Cardano.TraceDispatcher.Peer
                        Cardano.TraceDispatcher.Network.Docu
                        Cardano.TraceDispatcher.Network.Formatting
                        Cardano.TraceDispatcher.Network.Combinators

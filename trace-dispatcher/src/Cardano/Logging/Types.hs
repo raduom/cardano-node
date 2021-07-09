@@ -117,8 +117,7 @@ emptyObject = HM.empty
 newtype Documented a = Documented {undoc :: [DocMsg a]}
   deriving Show
 
--------------------------------------------------------------------
--- A unique identifier for every message, composed of text
+-- | A unique identifier for every message, composed of text
 type Namespace = [Text]
 
 -- | Document a message by giving a prototype, its most special name in the namespace
@@ -198,6 +197,9 @@ data TraceObject = TraceObject {
   , toThreadId  :: Text
 } deriving (Eq, Show)
 
+----------------------------------------------------------------
+-- Configuration
+
 -- |
 data FormattedMessage =
       FormattedHuman Bool Text
@@ -271,6 +273,9 @@ emptyTraceConfig = TraceConfig {
   , tcForwarderQueueSize = 1500
   }
 
+---------------------------------------------------------------------------
+-- Control and Documentation
+
 -- | When configuring a net of tracers, it should be run with Config on all
 -- entry points first, and then with Optimize. When reconfiguring it needs to
 -- run Reset followed by Config followed by Optimize
@@ -299,6 +304,9 @@ emptyLogDoc d m = LogDoc d (Map.fromList m) [] [] [] [] [] [] []
 
 -- | Type for a Fold
 newtype Folding a b = Folding b
+
+---------------------------------------------------------------------------
+-- LogFormatting instances
 
 instance LogFormatting b => LogFormatting (Folding a b) where
   forMachine v (Folding b) =  forMachine v b
