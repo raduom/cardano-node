@@ -14,6 +14,9 @@
    3. [Logging](#Logging)
    4. [Logs rotation](#Logs-rotation)
    5. [Prometheus](#Prometheus)
+4. [Appendix](#Appendix)
+   1. [SSH socket forwarding](#SSH-socket-forwarding)
+   2. [Example 1](#Example-1)
 
 # Introduction
 
@@ -97,8 +100,8 @@ The field `acceptAt` specifies an endpoint which using to connect with `cardano-
 
 where `/tmp/cardano-tracer.sock` is a local path to Unix socket. Please note that `cardano-tracer` **does not** support connection via IP-address and port, to avoid unauthorized connections. So there are two possible cases:
 
-1. `cardano-tracer` and `cardano-node` work on the **same** machine. In this case, they will use the Unix socket directly.
-2. `cardano-tracer` and `cardano-node` work on **different** machines. In this case, they will be connected using SSH socket forwarding. Also, this case corresponds to the situation when _one_ `cardano-tracer` is connected to _multiple_ `cardano-node`s.
+1. `cardano-tracer` and `cardano-node` work on the **same** machine. In this case, they will use the same Unix socket directly.
+2. `cardano-tracer` and `cardano-node` work on **different** machines. In this case, they will be connected using SSH socket forwarding (please see an explanation below). Also, this case corresponds to the situation when _one_ `cardano-tracer` is connected to _multiple_ `cardano-node`s.
 
 ## Requests
 
@@ -192,3 +195,65 @@ After you open `http://127.0.0.1:12798` in your browser you will see:
 2. the list of identifiers of connected nodes.
 
 Each identifier is a hyperlink to the page where you will see the list of EKG metrics received from the corresponding node.
+
+# Appendix
+
+## SSH socket forwarding
+
+As was mentioned above, `cardano-tracer` supports the connection with `cardano-node` via the local socket only. And if `cardano-tracer` and `cardano-node` work on the **same** machine, they use the same Unix socket directly. It can be shown like this:
+
+```
+machine
++----------------------------------+
+| cardano-node      cardano-tracer |
+|             \    /               |
+|              v  v                |
+|         /path/to/socket          |
++----------------------------------+
+```
+
+But if they work on **different** machines, you need SSH socket forwarding. It can be shown like this:
+
+```
+machine A                                             machine B
++-------------------------+                           +--------------------+
+| cardano-node            |                           |     cardano-tracer |
+|             \           |                           |    /               |
+|              v          |                           |   v                |
+|         /path/to/socket |<--SSH socket forwarding-->| /path/to/socket    |
++-------------------------+                           +--------------------+
+```
+
+So, from the programs' point of view, they still work with `/path/to/socket` directly. But actually, there are two local sockets on two machines, and SSH socket forwarding mechanism connects these sockets. In other words, SSH socket forwarding allows treating `/path/to/socket` on the machine `A` and `/path/to/socket` on the machine `B` as the **same** local socket.
+
+## Example 1
+
+Suppose you have:
+
+1. machine `A` with `cardano-node` installed,
+2. machine `B` with `cardano-tracer` installed and configured as `Initiator`,
+3. SSH-access from `B` to `A`.
+
+The most convenient case is when your access from `B` to `A` is **key**-based, not **password**-based.
+
+First of all, run this command on machine `B`:
+
+```
+ssh -nNT -L /tmp/cardano-tracer.sock:/tmp/cardano-tracer.sock -o "ExitOnForwardFailure yes" USER_ON_MACHINE_A@IP_OF_MACHINE_A
+```
+
+where:
+
+1. the first `/tmp/cardano-tracer.sock` before colon is the local socket on the machine `B`,
+2. the second `/tmp/cardano-tracer.sock` after colon is the local socket on the machine `A`,
+3. `USER_ON_MACHINE_A` is the name of your user on the machine `A`,
+4. `IP_OF_MACHINE_A` is IP address of the machine `A`.
+
+This command establishes the connection between local sockets on machines `A` and `B`.
+
+Then run `cardano-node` on the machine `A`. This is because `cardano-tracer` is configured as `Initiator`: in this mode `cardano-node` should be launched **before** `cardano-tracer`.
+
+Finally, run `cardano-tracer` on the machine `B`.
+
+Please make sure that `TraceOptionForwarder` field in the node's configuration file and `acceptAt` field in the tracer's configuration file contain the same `/tmp/cardano-tracer.sock` path.
+
