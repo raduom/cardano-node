@@ -1,8 +1,6 @@
 {
-  "acceptAt": {
-    "tag": "LocalSocket",
-    "contents": "/tmp/forwarder.sock"
-  },
+  "connectMode": "Initiator",
+  "acceptAt": "/tmp/forwarder.sock",
   "loRequestNum": 1,
   "ekgRequestFreq": 1,
   "hasEKG": null,
