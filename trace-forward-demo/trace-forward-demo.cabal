@@ -10,7 +10,6 @@ author:              IOHK
 maintainer:          operations@iohk.io
 build-type:          Simple
 extra-doc-files:     README.md
-                     CHANGELOG.md
 
 executable demo-acceptor
   main-is:             acceptor.hs
