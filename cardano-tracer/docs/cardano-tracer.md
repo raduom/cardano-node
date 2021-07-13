@@ -212,19 +212,19 @@ machine
 +----------------------------------+
 ```
 
-But if they work on **different** machines, you need SSH socket forwarding. It can be shown like this:
+But if they work on **different** machines, you need SSH socket forwarding. This mechanism can be shown like this:
 
 ```
 machine A                                             machine B
-+-------------------------+                           +--------------------+
-| cardano-node            |                           |     cardano-tracer |
-|             \           |                           |    /               |
-|              v          |                           |   v                |
-|         /path/to/socket |<--SSH socket forwarding-->| /path/to/socket    |
-+-------------------------+                           +--------------------+
++-------------------------+                           +-------------------------+
+| cardano-node            |                           |          cardano-tracer |
+|             \           |                           |         /               |
+|              v          |                           |        v                |
+|         /path/to/socket |<--SSH socket forwarding-->| /path/to/socket         |
++-------------------------+                           +-------------------------+
 ```
 
-So, from the programs' point of view, they still work with `/path/to/socket` directly. But actually, there are two local sockets on two machines, and SSH socket forwarding mechanism connects these sockets. In other words, SSH socket forwarding allows treating `/path/to/socket` on the machine `A` and `/path/to/socket` on the machine `B` as the **same** local socket.
+So, from the programs' point of view, they still work with the same `/path/to/socket` directly. But actually, there are two local sockets on two machines, and SSH socket forwarding mechanism connects these sockets. In other words, this mechanism allows treating `/path/to/socket` on the machine `A` and `/path/to/socket` on the machine `B` as the **same** local socket.
 
 ## Example 1
 
@@ -234,26 +234,33 @@ Suppose you have:
 2. machine `B` with `cardano-tracer` installed and configured as `Initiator`,
 3. SSH-access from `B` to `A`.
 
-The most convenient case is when your access from `B` to `A` is **key**-based, not **password**-based.
+The most convenient case is when your access from `B` to `A` is **key**-based, not **password**-based. Please [read the documentation](https://www.ssh.com/academy/ssh/key) for more details.
 
-First of all, run this command on machine `B`:
+[OpenSSH](https://www.openssh.com/) supports socket forwarding out of the box. So, first of all, run the following command on `B`:
 
 ```
-ssh -nNT -L /tmp/cardano-tracer.sock:/tmp/cardano-tracer.sock -o "ExitOnForwardFailure yes" USER_ON_MACHINE_A@IP_OF_MACHINE_A
+ssh -nNT -L PATH_TO_SOCKET_ON_MACHINE_B:PATH_TO_SOCKET_ON_MACHINE_A -o "ExitOnForwardFailure yes" USER_ON_MACHINE_A@IP_OF_MACHINE_A
 ```
 
 where:
 
-1. the first `/tmp/cardano-tracer.sock` before colon is the local socket on the machine `B`,
-2. the second `/tmp/cardano-tracer.sock` after colon is the local socket on the machine `A`,
-3. `USER_ON_MACHINE_A` is the name of your user on the machine `A`,
-4. `IP_OF_MACHINE_A` is IP address of the machine `A`.
+1. `PATH_TO_SOCKET_ON_MACHINE_B` is the local socket on `B`,
+2. `PATH_TO_SOCKET_ON_MACHINE_A` is the local socket on `A`,
+3. `USER_ON_MACHINE_A` is the name of your user on `A`,
+4. `IP_OF_MACHINE_A` is an IP address (or hostname) of `A`.
 
-This command establishes the connection between local sockets on machines `A` and `B`.
+Real example:
 
-Then run `cardano-node` on the machine `A`. This is because `cardano-tracer` is configured as `Initiator`: in this mode `cardano-node` should be launched **before** `cardano-tracer`.
+```
+ssh -nNT -L /tmp/cardano-tracer.sock:/tmp/cardano-tracer.sock -o "ExitOnForwardFailure yes" john@123.45.67.89
+```
 
-Finally, run `cardano-tracer` on the machine `B`.
+This command connects the local socket `/tmp/cardano-tracer.sock` on your local machine with the local socket `/tmp/cardano-tracer.sock` on the remote machine `123.45.67.89`.
 
-Please make sure that `TraceOptionForwarder` field in the node's configuration file and `acceptAt` field in the tracer's configuration file contain the same `/tmp/cardano-tracer.sock` path.
+Now you can run the node and the tracer.
 
+First, run `cardano-node` on `A`. This is because `cardano-tracer` is configured as `Initiator`: in this mode, `cardano-tracer` is treated as a client and `cardano-node` as a server, so the server should be launched **before** the client.
+
+Finally, run `cardano-tracer` on `B`.
+
+Please make sure that `TraceOptionForwarder` field in the node's configuration file and `acceptAt` field in the tracer's configuration file contain correct paths to the local sockets. In the previous example, both `TraceOptionForwarder` and `acceptAt` should contain `/tmp/cardano-tracer.sock` path.
