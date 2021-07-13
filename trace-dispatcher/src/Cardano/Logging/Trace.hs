@@ -170,7 +170,7 @@ setPrivacy p (Trace tr) = Trace $
                       else (lc {lcPrivacy = Just p}, mbC, v))
     tr
 
--- | Sets severities for the messages in this trace based on the selector function
+-- | Sets privacy for the messages in this trace based on the message
 withPrivacy :: Monad m => (a -> Privacy) -> Trace m a -> Trace m a
 withPrivacy fs (Trace tr) = Trace $
     T.contramap
@@ -188,7 +188,7 @@ setDetails p (Trace tr) = Trace $
                         else (lc {lcDetails = Just p}, mbC, v))
       tr
 
--- | Sets severities for the messages in this trace based on the selector function
+-- | Sets detail level for the messages in this trace based on the message
 withDetails :: Monad m => (a -> DetailLevel) -> Trace m a -> Trace m a
 withDetails fs (Trace tr) = Trace $
   T.contramap

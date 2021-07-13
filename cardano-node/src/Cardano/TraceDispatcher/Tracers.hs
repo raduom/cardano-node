@@ -214,7 +214,7 @@ mkCardanoTracer' name namesFor severityFor privacyFor
                                 else pure Nothing
         case mbEkgTrace <> mbForwardTrace <> mbStdoutTrace of
           Nothing -> pure $ Trace NT.nullTracer
-          Just tr -> pure tr
+          Just tr -> pure (preFormatted backends tr)
 
 
 -- | Construct tracers for all system components.

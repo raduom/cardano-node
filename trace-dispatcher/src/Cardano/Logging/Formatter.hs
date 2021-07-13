@@ -10,12 +10,15 @@ module Cardano.Logging.Formatter (
   , metricsFormatter
   , machineFormatter
   , forwardFormatter
+  , preFormatted
 ) where
 
 import qualified Control.Tracer as T
 import           Data.Aeson ((.=))
 import qualified Data.Aeson as AE
+import qualified Data.Aeson.Encoding as AE
 import qualified Data.ByteString.Lazy as BS
+import           Data.Functor.Contravariant
 import           Data.List (intersperse)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text, pack, stripPrefix)
@@ -28,6 +31,7 @@ import           Cardano.Logging.Types
 import           Control.Concurrent (myThreadId)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Network.HostName
+
 
 -- | Format this trace as metrics
 metricsFormatter
@@ -52,6 +56,7 @@ metricsFormatter application (Trace tr) = do
                                 , Just ctrl
                                 , FormattedMetrics metrics)
 
+-- | Format this trace as TraceObject for the trace forwarder
 forwardFormatter
   :: forall a m . (LogFormatting a, MonadIO m)
   => Text
@@ -199,7 +204,8 @@ machineFormatter application (Trace tr) = do
           obj <- liftIO $ formatContextMachine hn application lc (forMachine detailLevel v)
           T.traceWith tr (lc { lcNamespace = application : lcNamespace lc}
                              , Nothing
-                             , FormattedMachine (decodeUtf8 (BS.toStrict (AE.encode obj))))
+                             , FormattedMachine (decodeUtf8 (BS.toStrict
+                                    (AE.encodingToLazyByteString obj))))
         (lc, Just c, _v) -> do
           T.traceWith tr (lc { lcNamespace = application : lcNamespace lc}
                              , Just c
@@ -210,7 +216,7 @@ formatContextMachine ::
   -> Text
   -> LoggingContext
   -> AE.Object
-  -> IO AE.Value
+  -> IO AE.Encoding
 formatContextMachine hostname application LoggingContext {..} obj = do
   thid <- myThreadId
   time <- getCurrentTime
@@ -219,12 +225,37 @@ formatContextMachine hostname application LoggingContext {..} obj = do
                     ((stripPrefix "ThreadId " . pack . show) thid)
       ns       = application : lcNamespace
       ts       = pack $ formatTime defaultTimeLocale "%F %H:%M:%S%4Q" time
-  pure $ AE.object [  "at"      .= ts
-                    , "ns"      .= ns
-                    , "sev"     .= severity
-                    , "thread"  .= tid
-                    , "host"    .= hostname
-                    , "message" .= obj]
+  pure $ AE.pairs $    "at"      .= ts
+                    <> "ns"      .= ns
+                    <> "message" .= obj
+                    <> "sev"     .= severity
+                    <> "thread"  .= tid
+                    <> "host"    .= hostname
+
+
+-- | Transform this trace to a preformatted message, so that double serialization
+-- is avoided
+preFormatted ::
+  (  LogFormatting a
+  ,  Monad m)
+  => [BackendConfig]
+  -> Trace m (PreFormatted a)
+  -> Trace m a
+preFormatted backends tr@(Trace tr')=
+  if elem Forwarder backends
+    then if elem (Stdout HumanFormatUncoloured) backends
+            || elem (Stdout HumanFormatColoured) backends
+      then contramap (\msg -> PreFormatted msg (Just (forHuman msg)) Nothing) tr
+      else if elem (Stdout MachineFormat) backends
+        then Trace $ T.contramap
+              (\ (lc, mbC, msg) ->
+                let dtal = case lcDetails lc of
+                            Nothing  -> DRegular
+                            Just dtl -> dtl
+                in (lc, mbC, PreFormatted msg Nothing (Just (forMachine dtal msg))))
+              tr'
+        else contramap (\msg -> PreFormatted msg Nothing Nothing) tr
+    else contramap (\msg -> PreFormatted msg Nothing Nothing) tr
 
 -- | Color a text message based on `Severity`. `Error` and more severe errors
 -- are colored red, `Warning` is colored yellow, and all other messages are

@@ -4,8 +4,8 @@
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
-
 
 module Cardano.Logging.Types (
     Trace(..)
@@ -35,6 +35,7 @@ module Cardano.Logging.Types (
   , BackendConfig(..)
   , Folding(..)
   , TraceObject(..)
+  , PreFormatted(..)
 ) where
 
 import           Control.Tracer
@@ -304,6 +305,21 @@ emptyLogDoc d m = LogDoc d (Map.fromList m) [] [] [] [] [] [] []
 
 -- | Type for a Fold
 newtype Folding a b = Folding b
+
+data PreFormatted a = PreFormatted {
+    pfMessage    :: a
+  , pfForHuman   :: Maybe Text
+  , pfForMachine :: Maybe AE.Object
+  }
+
+instance LogFormatting a => LogFormatting (PreFormatted a) where
+  forMachine dtal PreFormatted {..} =  case pfForMachine of
+                                          Nothing -> forMachine dtal pfMessage
+                                          Just obj -> obj
+  forHuman PreFormatted {..}        =  case pfForHuman of
+                                          Nothing  -> forHuman pfMessage
+                                          Just txt -> txt
+  asMetrics PreFormatted {..}       =  asMetrics pfMessage
 
 ---------------------------------------------------------------------------
 -- LogFormatting instances
