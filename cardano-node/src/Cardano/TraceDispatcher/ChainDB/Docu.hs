@@ -167,14 +167,38 @@ docChainDBTraceEvent = Documented [
   , DocMsg
       (ChainDB.TraceAddBlockEvent
         (ChainDB.AddedToCurrentChain [] protoNTI protoAFH protoAFH))
-      []
+      [(["density"],
+        "The actual number of blocks created over the maximum expected number\
+        \ of blocks that could be created over the span of the last @k@ blocks.")
+      , (["slots"],
+        "Number of slots in this chain fragment.")
+      , (["blocks"],
+        "Number of blocks in this chain fragment.")
+      , (["slotInEpoch"],
+        "Relative slot number of the tip of the current chain within the\
+        \epoch..")
+      , (["epoch"],
+        "In which epoch is the tip of the current chain.")
+      ]
       "The new block fits onto the current chain (first\
       \ fragment) and we have successfully used it to extend our (new) current\
       \ chain (second fragment)."
   , DocMsg
       (ChainDB.TraceAddBlockEvent
         (ChainDB.SwitchedToAFork [] protoNTI protoAFH protoAFH))
-      []
+      [(["density"],
+        "The actual number of blocks created over the maximum expected number\
+        \ of blocks that could be created over the span of the last @k@ blocks.")
+      , (["slots"],
+        "Number of slots in this chain fragment.")
+      , (["blocks"],
+        "Number of blocks in this chain fragment.")
+      , (["slotInEpoch"],
+        "Relative slot number of the tip of the current chain within the\
+        \epoch..")
+      , (["epoch"],
+        "In which epoch is the tip of the current chain.")
+      ]
       "The new block fits onto some fork and we have switched to that fork\
       \ (second fragment), as it is preferable to our (previous) current chain\
       \ (first fragment)."
@@ -184,38 +208,37 @@ docChainDBTraceEvent = Documented [
           (ChainDB.InvalidBlock protoExtValidationError protoRealPoint)))
       []
       "An event traced during validating performed while adding a block.\
-      \A point was found to be invalid."
+      \ A point was found to be invalid."
   , DocMsg
       (ChainDB.TraceAddBlockEvent
         (ChainDB.AddBlockValidation
           (ChainDB.InvalidCandidate protoAFH)))
       []
       "An event traced during validating performed while adding a block.\
-      \A candidate chain was invalid."
+      \ A candidate chain was invalid."
   , DocMsg
       (ChainDB.TraceAddBlockEvent
         (ChainDB.AddBlockValidation
           (ChainDB.ValidCandidate protoAFH)))
       []
-      "An event traced during validating performed while adding a block\
-      \A candidate chain was valid."
+      "An event traced during validating performed while adding a block.\
+      \ A candidate chain was valid."
   , DocMsg
       (ChainDB.TraceAddBlockEvent
         (ChainDB.AddBlockValidation
           (ChainDB.CandidateContainsFutureBlocks protoAFH [])))
       []
-      "An event traced during validating performed while adding a block\
-      \Candidate contains headers from the future which do no exceed the\
-      \clock skew."
+      "An event traced during validating performed while adding a block.\
+      \ Candidate contains headers from the future which do no exceed the\
+      \ clock skew."
   , DocMsg
       (ChainDB.TraceAddBlockEvent
         (ChainDB.AddBlockValidation
           (ChainDB.CandidateContainsFutureBlocksExceedingClockSkew protoAFH [])))
       []
-      "An event traced during validating performed while adding a block\
-      \An event traced during validating performed while adding a block\
-      \Candidate contains headers from the future which do no exceed the\
-      \clock skew."
+      "An event traced during validating performed while adding a block.\
+      \ Candidate contains headers from the future which exceed the\
+      \ clock skew."
   , DocMsg
       (ChainDB.TraceAddBlockEvent
         (ChainDB.ChainSelectionForFutureBlock protoRealPoint))
@@ -348,7 +371,7 @@ docChainDBTraceEvent = Documented [
       (ChainDB.TraceIteratorEvent
         (ChainDB.BlockMissingFromVolatileDB protoRealPoint))
       []
-      " A block is no longer in the VolatileDB because it has been garbage\
+      "A block is no longer in the VolatileDB because it has been garbage\
       \ collected. It might now be in the ImmDB if it was part of the\
       \ current chain."
   , DocMsg
@@ -483,7 +506,7 @@ docChainDBTraceEvent = Documented [
       (ChainDB.TraceImmutableDBEvent
         (ImmDB.DeletingAfter protoWithOriginTip))
       []
-      "TODO"
+      "Delete after"
   , DocMsg
       (ChainDB.TraceImmutableDBEvent ImmDB.DBAlreadyClosed)
       []
@@ -497,19 +520,19 @@ docChainDBTraceEvent = Documented [
         (ImmDB.TraceCacheEvent
           (ImmDB.TraceCurrentChunkHit protoChunkNo 1)))
       []
-      "TODO"
+      "Current chunk found in the cache."
   , DocMsg
       (ChainDB.TraceImmutableDBEvent
         (ImmDB.TraceCacheEvent
           (ImmDB.TracePastChunkHit protoChunkNo 1)))
       []
-      "TODO"
+      "Past chunk found in the cache"
   , DocMsg
       (ChainDB.TraceImmutableDBEvent
         (ImmDB.TraceCacheEvent
           (ImmDB.TracePastChunkMiss protoChunkNo 1)))
       []
-      "TODO"
+      "Past chunk was not found in the cache"
   , DocMsg
       (ChainDB.TraceImmutableDBEvent
         (ImmDB.TraceCacheEvent
@@ -529,30 +552,30 @@ docChainDBTraceEvent = Documented [
       (ChainDB.TraceVolatileDBEvent
         (VolDB.DBAlreadyClosed))
       []
-      "TODO"
+      "When closing the DB it was found itis closed already."
   , DocMsg
       (ChainDB.TraceVolatileDBEvent
         (VolDB.DBAlreadyOpen))
       []
-      "TODO"
+      "TODO Doc"
   , DocMsg
       (ChainDB.TraceVolatileDBEvent
         (VolDB.Truncate protoParseError protoFsPath protoBlockOffset))
       []
-      "TODO"
+      "Truncates a file up to offset because of the error."
   , DocMsg
       (ChainDB.TraceVolatileDBEvent
         (VolDB.InvalidFileNames [protoFsPath]))
       []
-      "TODO"
+      "Reports a list of invalid file paths."
   , DocMsg
       (ChainDB.TraceVolatileDBEvent
         (VolDB.BlockAlreadyHere undefined))
       []
-      "TODO"
+      "A block was found to be already in the DB."
   , DocMsg
       (ChainDB.TraceVolatileDBEvent
         (VolDB.TruncateCurrentFile protoFsPath))
       []
-      "TODO"
+      "TODO Doc"
   ]

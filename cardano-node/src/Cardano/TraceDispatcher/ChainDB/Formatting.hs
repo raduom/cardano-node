@@ -278,8 +278,8 @@ instance ( LogFormatting (Header blk)
     let ChainInformation { slots, blocks, density, epoch, slotInEpoch } =
           chainInformation newTipInfo newChain 0
     in  [ DoubleM ["density"] (fromRational density)
-        , IntM    ["slotNum"] (fromIntegral slots)
-        , IntM    ["blockNum"] (fromIntegral blocks)
+        , IntM    ["slots"] (fromIntegral slots)
+        , IntM    ["blocks"] (fromIntegral blocks)
         , IntM    ["slotInEpoch"] (fromIntegral slotInEpoch)
         , IntM    ["epoch"] (fromIntegral (unEpochNo epoch))
         ]

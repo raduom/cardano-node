@@ -209,7 +209,7 @@ documentMarkdown (Documented documented) tracers = do
 
     configBuilder :: LogDoc -> Builder
     configBuilder LogDoc {..} =
-      fromText "From current configuration\n"
+      fromText "From current configuration:\n"
       <> case nub ldDetails of
           []  -> fromText "Details:   " <> asCode (fromString (show DRegular))
           [d] -> fromText "Details:   " <> asCode (fromString (show d))
@@ -287,6 +287,7 @@ documentMarkdown (Documented documented) tracers = do
         <> (mconcat (intersperse (singleton '.') (map fromText ns)))
           <> fromText "\n"
             <> case Map.lookup ns metricsDoc of
+                        Just ""   -> mempty
                         Just text -> betweenLines (fromText text)
                         Nothing   -> mempty
 
@@ -295,6 +296,7 @@ documentMarkdown (Documented documented) tracers = do
           <> mconcat (intersperse (singleton '.') (map fromText ns))
             <> fromText "\n"
               <> case Map.lookup ns metricsDoc of
+                        Just ""   -> mempty
                         Just text -> betweenLines (fromText text)
                         Nothing   -> mempty
     metricFormatToText metricsDoc (CounterM ns _) =
@@ -302,6 +304,7 @@ documentMarkdown (Documented documented) tracers = do
           <> mconcat (intersperse (singleton '.') (map fromText ns))
             <> fromText "\n"
               <> case Map.lookup ns metricsDoc of
+                        Just ""   -> mempty
                         Just text -> betweenLines (fromText text)
                         Nothing   -> mempty
 

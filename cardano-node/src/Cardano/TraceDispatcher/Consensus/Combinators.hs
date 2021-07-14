@@ -329,7 +329,7 @@ namesForBlockchainTime TraceStartTimeInTheFuture {} = ["StartTimeInTheFuture"]
 namesForBlockchainTime TraceCurrentSlotUnknown {}   = ["CurrentSlotUnknown"]
 namesForBlockchainTime TraceSystemClockMovedBack {} = ["SystemClockMovedBack"]
 
--- TODO: Confirm the severities
+-- TODO JNF: Confirm the severities
 severityBlockchainTime :: TraceBlockchainTimeEvent t -> SeverityS
 severityBlockchainTime TraceStartTimeInTheFuture {} = Warning
 severityBlockchainTime TraceCurrentSlotUnknown {}   = Warning

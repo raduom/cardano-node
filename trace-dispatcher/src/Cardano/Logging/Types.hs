@@ -34,6 +34,7 @@ module Cardano.Logging.Types (
   , emptyLogDoc
   , BackendConfig(..)
   , Folding(..)
+  , unfold
   , TraceObject(..)
   , PreFormatted(..)
 ) where
@@ -305,6 +306,9 @@ emptyLogDoc d m = LogDoc d (Map.fromList m) [] [] [] [] [] [] []
 
 -- | Type for a Fold
 newtype Folding a b = Folding b
+
+unfold :: Folding a b -> b
+unfold (Folding b) = b
 
 data PreFormatted a = PreFormatted {
     pfMessage    :: a

@@ -71,19 +71,36 @@ docBasicInfo = Documented [
     DocMsg
       (BICommon protoBasicInfoCommon)
       []
-      "TODO JNF"
+      "biConfigPath is the path to the config in use. \
+      \\nbiProtocol is the name of the protocol, e.g. \"Byron\", \"Shelley\" \
+      \or \"Byron; Shelley\". \
+      \\nbiVersion is the version of the node software running. \
+      \\nbiCommit is the commit revision of the software running. \
+      \\nbiNodeStartTime gives the time this node was started."
   , DocMsg
       (BIShelley protoBasicInfoShelley)
       []
-      "TODO JNF"
+      "bisEra is the current era, e.g. \"Shelley\", \"Allegra\", \"Mary\" \
+      \or \"Alonzo\". \
+      \\nbisSystemStartTime TODO JNF \
+      \\nbisSlotLength gives the length of a slot as time interval. \
+      \\nbisEpochLength gives the number of slots which forms an epoch. \
+      \\nbisSlotsPerKESPeriod gives the slots per KES period."
   , DocMsg
       (BIByron protoBasicInfoByron)
       []
-      "TODO JNF"
+      "bibSystemStartTime TODO JNF \
+      \\nbibSlotLength gives the length of a slot as time interval. \
+      \\nbibEpochLength gives the number of slots which forms an epoch."
   , DocMsg
       (BINetwork protoBasicInfoNetwork)
       []
-      "TODO JNF"
+      "niAddresses IPv4 or IPv6 socket ready to accept connections\
+      \or diffusion addresses. \
+      \\nniDiffusionMode shows if the node runs only initiator or both\
+      \initiator or responder node. \
+      \\nniDnsProducers shows the list of domain names to subscribe to. \
+      \\nniIpProducers shows the list of ip subscription addresses."
   ]
 
 getBasicInfo ::

@@ -30,7 +30,7 @@ import           Cardano.TraceDispatcher.ChainDB.Docu
 import           Cardano.TraceDispatcher.Consensus.Combinators
 import           Cardano.TraceDispatcher.Consensus.Docu
 import           Cardano.TraceDispatcher.Consensus.ForgingThreadStats
-                     (docForgeStats, forgeThreadStats)
+                     (docForgeStats, forgeThreadStats, ForgeThreadStats)
 import           Cardano.TraceDispatcher.Consensus.StateInfo
 import           Cardano.TraceDispatcher.Formatting ()
 import           Cardano.TraceDispatcher.Network.Combinators
@@ -937,7 +937,13 @@ docTracers configFileName outputFileName _ = do
     fTrDoc    <- documentMarkdown
                 (docForge :: Documented
                   (ForgeTracerType blk))
-                [fTr, fSttTr]
+                [fTr]
+    -- TODO JNF Docu for forgeThreadStats
+    -- fSttTr'      <- forgeThreadStats fSttTr
+    -- fSttTrDoc    <- documentMarkdown
+    --             (docForgeStats :: Documented
+    --               ForgeThreadStats)
+    --             [unfold fSttTr]
     btTrDoc   <- documentMarkdown
                 (docBlockchainTime :: Documented
                   (TraceBlockchainTimeEvent t))

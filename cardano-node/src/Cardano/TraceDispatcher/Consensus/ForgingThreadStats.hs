@@ -165,7 +165,21 @@ mapThreadStats fs@ForgingStats { fsStats } f1 f2 = do
       (newStats, w) = f1 threadStats
   pure $ f2 (fs {fsStats = Map.insert tid newStats fsStats}) w
 
-docForgeStats :: Documented (ForgeTracerType blk0)
+docForgeStats :: Documented ForgeThreadStats
 docForgeStats = Documented [
-  --TODO JNF
+    DocMsg
+      emptyForgeThreadStats
+      [(["nodeCannotForgeNum"],
+        "How many times this node could not forge?")
+      ,(["nodeIsLeaderNum"],
+        "How many times this node was leader?")
+      ,(["blocksForgedNum"],
+        "How many blocks did forge in this node?")
+      ,(["slotsMissed"],
+        "How many slots were missed in this node?")
+      ]
+      "nodeCannotForgeNum shows how many times this node could not forge.\
+      \\nnodeIsLeaderNum shows how many times this node was leader.\
+      \\nblocksForgedNum shows how many blocks did forge in this node.\
+      \\nslotsMissed shows how many slots were missed in this node."
   ]
