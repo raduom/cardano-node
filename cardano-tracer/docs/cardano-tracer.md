@@ -252,10 +252,10 @@ where:
 Real example:
 
 ```
-ssh -nNT -L /tmp/cardano-tracer.sock:/tmp/cardano-tracer.sock -o "ExitOnForwardFailure yes" john@123.45.67.89
+ssh -nNT -L /tmp/cardano-tracer.sock:/tmp/cardano-node.sock -o "ExitOnForwardFailure yes" john@109.75.33.121
 ```
 
-This command connects the local socket `/tmp/cardano-tracer.sock` on your local machine with the local socket `/tmp/cardano-tracer.sock` on the remote machine `123.45.67.89`.
+This command connects the local socket `/tmp/cardano-tracer.sock` on your local machine with the local socket `/tmp/cardano-node.sock` on the remote machine `123.45.67.89`.
 
 Now you can run the node and the tracer.
 
