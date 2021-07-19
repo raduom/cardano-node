@@ -97,8 +97,8 @@ protoRemotePeer = undefined
 protoFetchDecline :: FetchDecision [Point (Header blk)]
 protoFetchDecline = Left FetchDeclineChainNotPlausible
 
-protoFetchResult :: FetchDecision [Point (Header blk)]
-protoFetchResult = Right [protoPointH]
+_protoFetchResult :: FetchDecision [Point (Header blk)]
+_protoFetchResult = Right [protoPointH]
 
 protoFetchRequest :: BlockFetch.FetchRequest (Header blk)
 protoFetchRequest = undefined
