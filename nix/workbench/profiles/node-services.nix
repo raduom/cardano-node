@@ -72,7 +72,7 @@ let
                ];
 
                TraceOptionBackend = [
-                 {ns = ""; backends = ["Stdout MachineFormat" "EKGBackend"];}
+                 {ns = ""; backends = ["Stdout MachineFormat" "EKGBackend" "Forwarder"];}
                  ## {ns = "Node.ChainDB"; backends = ["Stdout HumanFormatColoured"];}
                ];
 

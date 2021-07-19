@@ -152,9 +152,9 @@ mkCardanoTracer name namesFor severityFor privacyFor trStdout trForward mbTrEkg 
     noHook :: Trace IO evt -> IO (Trace IO evt)
     noHook tr = pure tr
 
--- | Adds the possibility to add special tracers via the roiuting function
+-- | Adds the possibility to add special tracers via the hook function
 mkCardanoTracer' :: forall evt evt1.
-  (  LogFormatting evt1)
+     LogFormatting evt1
   => Text
   -> (evt -> [Text])
   -> (evt -> SeverityS)

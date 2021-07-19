@@ -120,9 +120,8 @@ docPeers :: Documented [PeerT blk]
 docPeers = Documented [
       DocMsg
         []
-        [(["peersFromNodeKernel"],"TODO JNF")
-        ]
-        "TODO JNF"
+        [(["peersFromNodeKernel"],"TODO Doc")]
+        "TODO Doc"
     ]
 
 instance LogFormatting [PeerT blk] where
