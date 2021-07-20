@@ -81,7 +81,7 @@ propFile format suffix localSockName = ioProperty $ do
  where
   config rootDir' localSock' = TracerConfig
     { connectMode    = Initiator
-    , acceptAt       = LocalSocket localSock'
+    , acceptAt       = [LocalSocket localSock']
     , loRequestNum   = 1
     , ekgRequestFreq = 1.0
     , hasEKG         = Nothing

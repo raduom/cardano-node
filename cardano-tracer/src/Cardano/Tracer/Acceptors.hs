@@ -11,12 +11,12 @@ module Cardano.Tracer.Acceptors
   ) where
 
 import           Codec.CBOR.Term (Term)
-import           Control.Concurrent (ThreadId, killThread, myThreadId)
+import           Control.Concurrent (ThreadId, killThread, myThreadId, threadDelay)
 import           Control.Concurrent.Async (async, asyncThreadId, wait, waitAnyCancel)
 import           Control.Concurrent.STM (atomically)
 import           Control.Concurrent.STM.TVar (TVar, modifyTVar', newTVarIO, readTVarIO)
 import           Control.Exception (SomeException, try)
-import           Control.Monad (void)
+import           Control.Monad (forever, forM_, void)
 import "contra-tracer" Control.Tracer (nullTracer)
 import qualified Data.ByteString.Lazy as LBS
 import           Data.IORef (IORef, newIORef, readIORef)
@@ -66,39 +66,53 @@ runAcceptors
   :: TracerConfig
   -> AcceptedItems
   -> IO ()
-runAcceptors config@TracerConfig{..} acceptedItems = do
-  stopEKG <- newIORef False
-  stopTF  <- newIORef False
+runAcceptors config acceptedItems = do
+  runAcceptors' config acceptedItems
+  waitForever
+ where
+  waitForever = forever $ threadDelay 1000000000
 
-  -- Temporary fill 'tidVar' using current 'ThreadId'. Later it will be
-  -- replaced by the real 'ThreadId' from 'serverAsync' (see below).
-  tmpTId <- myThreadId
-  tidVar :: TVar ThreadId <- newTVarIO tmpTId
+runAcceptors'
+  :: TracerConfig
+  -> AcceptedItems
+  -> IO ()
+runAcceptors' config@TracerConfig{..} acceptedItems =
+  forM_ acceptAt $ \localSocket -> void . async . forever $ do
+    runAcceptorForOneNode localSocket
+    threadDelay 1000000
+ where
+  runAcceptorForOneNode localSocket = do
+    stopEKG <- newIORef False
+    stopTF  <- newIORef False
 
-  let configs = mkAcceptorsConfigs config stopEKG stopTF
+    -- Temporary fill 'tidVar' using current 'ThreadId'. Later it will be
+    -- replaced by the real 'ThreadId' from 'serverAsync' (see below).
+    tmpTId <- myThreadId
+    tidVar :: TVar ThreadId <- newTVarIO tmpTId
 
-  try (runAcceptors' connectMode acceptAt configs tidVar acceptedItems) >>= \case
-    Left (e :: SomeException) -> do
-      -- There is some problem (probably the connection was dropped).
-      putStrLn $ "cardano-tracer, runAcceptors problem: " <> show e
-      -- Explicitly stop 'serverAsync'.
-      killThread =<< readTVarIO tidVar
-      runAcceptors config acceptedItems
-    Right _ -> return ()
-
+    let configs = mkAcceptorsConfigs config localSocket stopEKG stopTF
+    try (runAcceptor connectMode localSocket configs tidVar acceptedItems) >>= \case
+      Left (e :: SomeException) -> do
+        -- There is some problem (probably the connection was dropped).
+        putStrLn $ "cardano-tracer, runAcceptor problem: " <> show e
+        -- Explicitly stop 'serverAsync'.
+        killThread =<< readTVarIO tidVar
+      Right _ -> return ()
+    
 mkAcceptorsConfigs
   :: TracerConfig
+  -> Address
   -> IORef Bool
   -> IORef Bool
   -> ( EKGF.AcceptorConfiguration
      , TF.AcceptorConfiguration TraceObject
      )
-mkAcceptorsConfigs TracerConfig{..} stopEKG stopTF = (ekgConfig, tfConfig)
+mkAcceptorsConfigs TracerConfig{..} localSocket stopEKG stopTF = (ekgConfig, tfConfig)
  where
   ekgConfig =
     EKGF.AcceptorConfiguration
       { EKGF.acceptorTracer    = nullTracer
-      , EKGF.forwarderEndpoint = forEKGF acceptAt
+      , EKGF.forwarderEndpoint = forEKGF localSocket
       , EKGF.requestFrequency  = secondsToNominalDiffTime ekgRequestFreq
       , EKGF.whatToRequest     = EKGF.GetAllMetrics
       , EKGF.actionOnResponse  = print
@@ -110,7 +124,7 @@ mkAcceptorsConfigs TracerConfig{..} stopEKG stopTF = (ekgConfig, tfConfig)
   tfConfig =
     TF.AcceptorConfiguration
       { TF.acceptorTracer    = nullTracer
-      , TF.forwarderEndpoint = forTF acceptAt
+      , TF.forwarderEndpoint = forTF localSocket
       , TF.whatToRequest     = TF.GetTraceObjects loRequestNum
       , TF.actionOnReply     = print
       , TF.shouldWeStop      = stopTF
@@ -120,25 +134,25 @@ mkAcceptorsConfigs TracerConfig{..} stopEKG stopTF = (ekgConfig, tfConfig)
   forTF (LocalSocket p)   = TF.LocalPipe p
   forEKGF (LocalSocket p) = EKGF.LocalPipe p
 
-runAcceptors'
+runAcceptor
   :: ConnectMode
   -> Address
   -> (EKGF.AcceptorConfiguration, TF.AcceptorConfiguration TraceObject)
   -> TVar ThreadId
   -> AcceptedItems
   -> IO ()
-runAcceptors' mode (LocalSocket localSock) (ekgConfig, tfConfig) tidVar acceptedItems = withIOManager $ \iocp -> do
+runAcceptor mode (LocalSocket localSock) (ekgConfig, tfConfig) tidVar acceptedItems = withIOManager $ \iocp -> do
   let snock = localSnocket iocp localSock
       addr  = localAddressFromPath localSock
   case mode of
     Initiator ->
-      doConnectToAcceptor snock addr noTimeLimitsHandshake tidVar acceptedItems $
+      doConnectToAcceptor snock addr noTimeLimitsHandshake $
         appInitiator
           [ (runEKGAcceptorInit          ekgConfig acceptedItems, 1)
           , (runTraceObjectsAcceptorInit tfConfig  acceptedItems, 2)
           ]
     Responder ->
-      doListenToForwarder snock addr noTimeLimitsHandshake tidVar acceptedItems $
+      doListenToForwarder snock addr noTimeLimitsHandshake tidVar $
         appResponder
           [ (runEKGAcceptor          ekgConfig acceptedItems, 1)
           , (runTraceObjectsAcceptor tfConfig  acceptedItems, 2)
@@ -165,15 +179,12 @@ runAcceptors' mode (LocalSocket localSock) (ekgConfig, tfConfig) tidVar accepted
       ]
 
 doConnectToAcceptor
-  :: (Ord addr, Show addr)
-  => Snocket IO fd addr
+  :: Snocket IO fd addr
   -> addr
   -> ProtocolTimeLimits (Handshake UnversionedProtocol Term)
-  -> TVar ThreadId
-  -> AcceptedItems
   -> OuroborosApplication 'InitiatorMode addr LBS.ByteString IO () Void
   -> IO ()
-doConnectToAcceptor snocket address timeLimits tidVar acceptedItems app =
+doConnectToAcceptor snocket address timeLimits app =
   connectToNode
     snocket
     unversionedHandshakeCodec
@@ -189,15 +200,14 @@ doConnectToAcceptor snocket address timeLimits tidVar acceptedItems app =
     address
 
 doListenToForwarder
-  :: (Ord addr, Show addr)
+  :: Ord addr
   => Snocket IO fd addr
   -> addr
   -> ProtocolTimeLimits (Handshake UnversionedProtocol Term)
   -> TVar ThreadId
-  -> AcceptedItems
   -> OuroborosApplication 'ResponderMode addr LBS.ByteString IO Void ()
   -> IO ()
-doListenToForwarder snocket address timeLimits tidVar acceptedItems app = do
+doListenToForwarder snocket address timeLimits tidVar app = do
   networkState <- newNetworkMutableState
   nsAsync <- async $ cleanNetworkMutableState networkState
   clAsync <- async . void $

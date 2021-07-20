@@ -65,7 +65,7 @@ data ConnectMode
 
 data TracerConfig = TracerConfig
   { connectMode    :: !ConnectMode
-  , acceptAt       :: !Address
+  , acceptAt       :: ![Address]
   , loRequestNum   :: !Word16 -- ^ How many 'TraceObject's in one request.
   , ekgRequestFreq :: !Pico   -- ^ How often to request EKG-metrics.
   , hasEKG         :: !(Maybe Endpoint)

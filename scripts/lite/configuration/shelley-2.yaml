@@ -286,5 +286,5 @@ TraceOptionLimiter:
     limiterName: ResourceLimiter
     limiterFrequency: 1.0
 TraceOptionForwarder:
-  filePath: "/tmp/forwarder.sock"
+  filePath: "/tmp/forwarder-2.sock"
 TraceOptionForwardQueueSize: 780
