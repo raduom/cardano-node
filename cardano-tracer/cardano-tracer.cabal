@@ -123,7 +123,7 @@ test-suite cardano-tracer-test
                        , ekg-forward
                        , filepath
                        , io-sim
-                       , io-sim-classes
+                       , io-classes
                        , network
                        , ouroboros-network-framework
                        , QuickCheck

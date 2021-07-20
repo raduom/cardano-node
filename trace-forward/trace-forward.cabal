@@ -52,7 +52,7 @@ library
                        , bytestring
                        , cborg
                        , contra-tracer
-                       , io-sim-classes
+                       , io-classes
                        , network
                        , ouroboros-network-framework
                        , serialise
