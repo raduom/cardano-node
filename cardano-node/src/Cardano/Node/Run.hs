@@ -75,7 +75,6 @@ import           Ouroboros.Consensus.Node (DiffusionArguments (..),
 import qualified Ouroboros.Consensus.Node as Node (getChainDB, run)
 import           Ouroboros.Consensus.Node.ProtocolInfo
 import           Ouroboros.Consensus.Util.Orphans ()
-import           Ouroboros.Network.Magic (NetworkMagic (..))
 import           Ouroboros.Network.NodeToNode (AcceptedConnectionsLimit (..),
                      DiffusionMode)
 
@@ -87,8 +86,7 @@ import           Cardano.Node.Configuration.Socket (SocketOrSocketInfo (..),
                      renderSocketConfigError)
 import           Cardano.Node.Configuration.Topology
 import           Cardano.Node.Handlers.Shutdown
-import           Cardano.Node.Protocol (mkConsensusProtocol,
-                     renderProtocolInstantiationError)
+import           Cardano.Node.Protocol (mkConsensusProtocol)
 import           Cardano.Node.Protocol.Types
 import           Cardano.Tracing.Kernel
 import           Cardano.Tracing.Peer
@@ -123,7 +121,7 @@ runNode cmdPc = do
     p :: SomeConsensusProtocol <-
       case eitherSomeProtocol of
         Left err -> putStrLn (displayError err) >> exitFailure
-        Right p -> pure p
+        Right p  -> pure p
 
     eLoggingLayer <- runExceptT $ createLoggingLayer
                      (ncTraceConfig nc)
@@ -230,13 +228,13 @@ handlePeersListSimple tr nodeKern = forever $ do
   threadDelay 2000000 -- 2 seconds.
 
 isOldLogging :: TraceOptions -> Bool
-isOldLogging TracingOff            = False
-isOldLogging (TracingOn _)         = True
+isOldLogging TracingOff          = False
+isOldLogging (TracingOn _)       = True
 isOldLogging (TraceDispatcher _) = False
 
 isNewLogging :: TraceOptions -> Bool
-isNewLogging TracingOff            = False
-isNewLogging (TracingOn _)         = False
+isNewLogging TracingOff          = False
+isNewLogging (TracingOn _)       = False
 isNewLogging (TraceDispatcher _) = True
 
 -- | Sets up a simple node, which will run the chain sync protocol and block

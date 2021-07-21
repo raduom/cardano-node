@@ -244,6 +244,8 @@ instance LogFormatting (BlockFetch.TraceFetchClientState header) where
     mkObject [ "kind" .= String "AddedFetchRequest" ]
   forMachine _dtal BlockFetch.AcknowledgedFetchRequest {} =
     mkObject [ "kind" .= String "AcknowledgedFetchRequest" ]
+  forMachine _dtal BlockFetch.SendFetchRequest {} =
+    mkObject [ "kind" .= String "SendFetchRequest" ]
   forMachine _dtal BlockFetch.CompletedBlockFetch {} =
     mkObject [ "kind" .= String "CompletedBlockFetch" ]
   forMachine _dtal BlockFetch.CompletedFetchBatch {} =

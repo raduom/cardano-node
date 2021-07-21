@@ -39,7 +39,7 @@ import           Ouroboros.Network.Point (WithOrigin, withOriginToMaybe)
 import           Ouroboros.Consensus.Shelley.Ledger hiding (TxId)
 import           Ouroboros.Consensus.Shelley.Ledger.Inspect
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosCannotForge (..))
-import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
+import           Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Ouroboros.Consensus.Shelley.Protocol.HotKey as HotKey
 
 -- import qualified Cardano.Ledger.AuxiliaryData as Core
@@ -629,7 +629,6 @@ instance LogFormatting (DelegPredicateFailure era) where
     mkObject [ "kind" .= String "MIRProducesNegativeUpdate"
              ]
 
-
 instance LogFormatting (PoolPredicateFailure era) where
   forMachine _dtal (StakePoolNotRegisteredOnKeyPOOL (KeyHash unregStakePool)) =
     mkObject [ "kind" .= String "StakePoolNotRegisteredOnKeyPOOL"
@@ -648,7 +647,12 @@ instance LogFormatting (PoolPredicateFailure era) where
              , "protocolParCost" .= String (textShow protCost)
              , "error" .= String "The stake pool cost is too low"
              ]
-
+  forMachine _dtal (PoolMedataHashTooBig (KeyHash stakePool) hashSize) =
+    mkObject [ "kind" .= String "PoolMedataHashTooBig"
+             , "hashSize" .= String (textShow hashSize)
+             , "poolID" .= String (textShow stakePool)
+             , "error" .= String "The stake pool metadata hash is too large"
+             ]
 
 -- Apparently this should never happen according to the Shelley exec spec
   forMachine _dtal (WrongCertificateTypePOOL index) =

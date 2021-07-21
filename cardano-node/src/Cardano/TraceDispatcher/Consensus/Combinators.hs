@@ -151,6 +151,7 @@ severityBlockFetchClient' ::
   -> SeverityS
 severityBlockFetchClient' BlockFetch.AddedFetchRequest {}        = Info
 severityBlockFetchClient' BlockFetch.AcknowledgedFetchRequest {} = Info
+severityBlockFetchClient' BlockFetch.SendFetchRequest {}         = Info
 severityBlockFetchClient' BlockFetch.StartedFetchBatch {}        = Info
 severityBlockFetchClient' BlockFetch.CompletedBlockFetch {}      = Info
 severityBlockFetchClient' BlockFetch.CompletedFetchBatch {}      = Info
@@ -169,6 +170,8 @@ namesForBlockFetchClient' BlockFetch.AddedFetchRequest {} =
       ["AddedFetchRequest"]
 namesForBlockFetchClient' BlockFetch.AcknowledgedFetchRequest {}  =
       ["AcknowledgedFetchRequest"]
+namesForBlockFetchClient' BlockFetch.SendFetchRequest {} =
+      ["SendFetchRequest"]
 namesForBlockFetchClient' BlockFetch.StartedFetchBatch {} =
       ["StartedFetchBatch"]
 namesForBlockFetchClient' BlockFetch.CompletedBlockFetch  {} =

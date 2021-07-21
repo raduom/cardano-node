@@ -44,8 +44,8 @@ import qualified Cardano.Chain.Block as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import           Cardano.Slotting.Slot (fromWithOrigin)
 
+import           Cardano.Ledger.BaseTypes (StrictMaybe (..), fromSMaybe)
 import qualified Ouroboros.Consensus.Shelley.Ledger as Shelley
-import           Shelley.Spec.Ledger.BaseTypes (StrictMaybe (..), fromSMaybe)
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
 

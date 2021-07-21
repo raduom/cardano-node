@@ -31,8 +31,6 @@ import           Cardano.Ledger.Alonzo.TxBody (TxOut)
 import           Ouroboros.Consensus.Block (BlockProtocol, CannotForge,
                      ForgeStateUpdateError, Header)
 import           Cardano.Ledger.Crypto (StandardCrypto)
-import           Ouroboros.Consensus.Block (BlockProtocol, CannotForge, ForgeStateUpdateError,
-                   Header)
 import           Ouroboros.Consensus.HeaderValidation (OtherHeaderEnvelopeError)
 import           Ouroboros.Consensus.Ledger.Abstract (LedgerError)
 import           Ouroboros.Consensus.Ledger.Inspect (LedgerEvent, LedgerUpdate,
