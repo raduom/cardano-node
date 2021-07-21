@@ -60,7 +60,7 @@ addressToNodeId remoteAddress =
   preparedLocalSocket =
     -- The format of 'remoteAddress' in this case looks like 'LocalAddress "temp-NUM"',
     -- so make it simpler, like 'LocalAddress-temp-NUM'.
-    unpack . replace " " "-" . replace "\"" "" . pack $ remoteAddress
+    unpack . replace " " "-" . replace "\"" "" . replace "/" "-" . pack $ remoteAddress
 
 type TraceObjects = TBQueue TraceObject
 
