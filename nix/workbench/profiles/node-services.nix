@@ -80,7 +80,7 @@ let
                  {ns = "Node.ChainDB.OpenEvent"; limiterName = "ChainDB open limiter"; limiterFrequency = 0.1;}
                ];
 
-               TraceOptionForwarder = {filePath = "/tmp/forwarder.sock";};
+               TraceOptionForwarder = {filePath = "/tmp/forwarder-${toString i}.sock";};
 
                TraceOptionForwardQueueSize = 700;
 
