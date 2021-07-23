@@ -65,7 +65,12 @@ The real-life example of the configuration file looks like this:
 
 ```
 {
-  "acceptAt": "/tmp/cardano-tracer.sock",
+  "connectMode": "Initiator",
+  "acceptAt": [
+    "/tmp/forwarder-1.sock",
+    "/tmp/forwarder-2.sock",
+    "/tmp/forwarder-3.sock"
+  ],
   "loRequestNum": 10,
   "ekgRequestFreq": 1,
   "hasEKG": null,
@@ -90,18 +95,44 @@ The real-life example of the configuration file looks like this:
 
 Let's explore it in detail.
 
-## Accept endpoint
+## Accept endpoints
 
-The field `acceptAt` specifies an endpoint which using to connect with `cardano-node`:
+The field `acceptAt` specifies a list of endpoints which using to connect `cardano-tracer` with one or more `cardano-node` processes:
 
 ```
-"acceptAt": "/tmp/cardano-tracer.sock"
+"acceptAt": [
+  "/tmp/forwarder-1.sock",
+  "/tmp/forwarder-2.sock",
+  "/tmp/forwarder-3.sock"
+]
 ```
 
-where `/tmp/cardano-tracer.sock` is a local path to Unix socket. Please note that `cardano-tracer` **does not** support connection via IP-address and port, to avoid unauthorized connections. So there are two possible cases:
+where `/tmp/forwarder-*.sock` are local paths to Unix sockets. You can think of these sockets as channels to connect with nodes, in this example - with 3 nodes. It can be shown like this:
+
+```
+                                                  +----------------+
+                    --> /tmp/forwarder-1.sock --> | cardano-node 1 |
+                   /                              +----------------+
++----------------+                                +----------------+
+| cardano-tracer | ---> /tmp/forwarder-2.sock --> | cardano-node 2 |
++----------------+                                +----------------+
+                   \                              +----------------+
+                    --> /tmp/forwarder-3.sock --> | cardano-node 3 |
+                                                  +----------------+
+```
+
+Please note that `cardano-tracer` **does not** support connection via IP-address and port, to avoid unauthorized connections. So there are two possible cases:
 
 1. `cardano-tracer` and `cardano-node` work on the **same** machine. In this case, they will use the same Unix socket directly.
 2. `cardano-tracer` and `cardano-node` work on **different** machines. In this case, they will be connected using SSH socket forwarding (please see an explanation below). Also, this case corresponds to the situation when _one_ `cardano-tracer` is connected to _multiple_ `cardano-node`s.
+
+## Connection mode
+
+The field `connectMode` specifies the connection mode, i.e. how `cardano-tracer` and `cardano-node` will be connected. There are two possible modes, `Initiator` and `Responder`.
+
+The mode `Initiator` means that `cardano-tracer` **initiates** the connection, so you can think of `cardano-tracer` as a client and `cardano-node` as a server. By default you should use `Initiator` mode.
+
+The mode `Responder` means that `cardano-tracer` **accepts** the connection.
 
 ## Requests
 
