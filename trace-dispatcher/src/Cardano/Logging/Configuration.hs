@@ -16,6 +16,7 @@ module Cardano.Logging.Configuration
   , withBackendsFromConfig
   , withLimitersFromConfig
   , readConfiguration
+  , defaultConfig
   ) where
 
 import           Control.Exception (throwIO)
@@ -38,6 +39,17 @@ import           Cardano.Logging.FrequencyLimiter (LimitingMessage (..),
                      limitFrequency)
 import           Cardano.Logging.Trace (filterTraceBySeverity, setDetails)
 import           Cardano.Logging.Types
+
+defaultConfig :: TraceConfig
+defaultConfig = emptyTraceConfig {
+  tcOptions = Map.fromList
+    [([] :: Namespace,
+         [ CoSeverity InfoF
+         , CoDetail DRegular
+         , CoBackend [Stdout HumanFormatColoured]
+         ])
+    ]
+  }
 
 -- | Call this function at initialisation, and later for reconfiguration
 configureTracers :: Monad m => TraceConfig -> Documented a -> [Trace m a]-> m ()

@@ -27,6 +27,7 @@ library
                       Cardano.Logging.Tracer.EKG
                       Cardano.Logging.Tracer.Standard
                       Cardano.Logging.Tracer.Forward
+                      Cardano.Logging.Tracer.Composed
                       Control.Tracer.Arrow
                       Control.Tracer
 
@@ -93,7 +94,7 @@ executable trace-dispatcher-examples
                       Examples.Configuration
                       Examples.FrequencyLimiting
                       Examples.Documentation
-    hs-source-dirs:   test
+    hs-source-dirs:   examples
     default-language: Haskell2010
     default-extensions:  OverloadedStrings
     build-depends:    base >=4.12 && <5
@@ -112,6 +113,46 @@ executable trace-dispatcher-examples
                       , stm
                       , unordered-containers
                       , yaml
+  ghc-options:         -Wall
+                       -Wcompat
+                       -Wincomplete-uni-patterns
+                       -Wincomplete-record-updates
+                       -Wpartial-fields
+                       -Widentities
+                       -Wredundant-constraints
+                       -Wmissing-export-lists
+                       -Wno-incomplete-patterns
+
+test-suite trace-dispatcher-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             trace-dispatcher-test.hs
+  other-modules:       Cardano.Logging.Test.Filtering
+                       Cardano.Logging.Test.Config
+                       Cardano.Logging.Test.Tracer
+                       Cardano.Logging.Test.Messages
+  default-language:    Haskell2010
+  default-extensions:  OverloadedStrings
+  build-depends:       base >=4.12 && <5
+                      , aeson
+                      , bytestring
+                      , containers
+                      , ekg
+                      , ekg-core
+                      , hostname
+                      , text
+                      , trace-dispatcher
+                      , time
+                      , unagi-chan
+                      , unliftio
+                      , unliftio-core
+                      , stm
+                      , unordered-containers
+                      , yaml
+                      , QuickCheck
+                      , tasty
+                      , tasty-quickcheck
+
   ghc-options:         -Wall
                        -Wcompat
                        -Wincomplete-uni-patterns
