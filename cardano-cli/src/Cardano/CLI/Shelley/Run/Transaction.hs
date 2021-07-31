@@ -112,6 +112,7 @@ data ShelleyTxCmdError
   | ShelleyTxCmdEraConsensusModeMismatchQuery !AnyConsensusMode !AnyCardanoEra
   | ShelleyTxCmdByronEraQuery
   | ShelleyTxCmdLocalStateQueryError !ShelleyQueryCmdLocalStateQueryError
+  | ShelleyTxCmdUnsupportedVersion !MinNodeToClientVersion !NodeToClientVersion
 
   deriving Show
 
@@ -233,6 +234,10 @@ renderShelleyTxCmdError err =
     ShelleyTxCmdByronEraQuery -> "Query not available in Byron era"
     ShelleyTxCmdLocalStateQueryError err' -> renderLocalStateQueryError err'
     ShelleyTxCmdBalanceTxBody err' -> Text.pack $ displayError err'
+    ShelleyTxCmdUnsupportedVersion minNtcVersion ntcVersion ->
+      "Unsupported feature for the node-to-client protocol version.\n\
+      \This transaction requires at least " <> show minNtcVersion <> " but the node negotiated " <> show ntcVersion <> ".\n\
+      \Later node versions support later protocol versions (but development protocol versions are not enabled in the node by default)."
 
 renderEra :: AnyCardanoEra -> Text
 renderEra (AnyCardanoEra ByronEra)   = "Byron"
@@ -1431,16 +1436,18 @@ executeQuery era cModeP localNodeConnInfo q = do
     ByronEraInByronMode -> left ShelleyTxCmdByronEraQuery
     _ -> liftIO execQuery >>= queryResult
  where
-   execQuery :: IO (Either AcquireFailure (Either EraMismatch result))
+   execQuery :: IO (Either QueryError (Either EraMismatch result))
    execQuery = queryNodeLocalState localNodeConnInfo Nothing q
 
-
 queryResult
-  :: Either AcquireFailure (Either EraMismatch a)
+  :: Either QueryError (Either EraMismatch a)
   -> ExceptT ShelleyTxCmdError IO a
 queryResult eAcq =
   case eAcq of
-    Left acqFailure -> left $ ShelleyTxCmdAcquireFailure acqFailure
+    Left (QueryErrorAcquireFailure acquireFailure) ->
+      left $ ShelleyTxCmdAcquireFailure acquireFailure
+    Left (QueryErrorUnsupportedVersion minNtcVersion ntcVersion) ->
+      left $ ShelleyTxCmdUnsupportedVersion minNtcVersion ntcVersion
     Right eResult ->
       case eResult of
         Left err -> left . ShelleyTxCmdLocalStateQueryError $ EraMismatchError err

@@ -33,7 +33,7 @@ main = do
   putStrLn $ "Connecting to socket: " <> socketPath
   connectToLocalNodeWithVersion
     (connectInfo socketPath)
-    (\_ntcVersion -> protocols)
+    (const protocols)
   where
   connectInfo :: FilePath -> LocalNodeConnectInfo CardanoMode
   connectInfo socketPath =
