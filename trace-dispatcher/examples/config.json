@@ -16,11 +16,11 @@
   "TraceOptionDetail": [
     {
       "ns": "",
-      "detail": "DRegular"
+      "detail": "DNormal"
     },
     {
       "ns": "Cardano.Node.BlockFetchClient",
-      "detail": "DBrief"
+      "detail": "DMinimal"
     }
   ],
   "TraceOptionBackend": [

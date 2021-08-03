@@ -7,8 +7,8 @@ To add in node-services.nix
                ];
 
                 TraceOptionDetail = [
-                  {ns = ""; detail = "DRegular";}
-                  {ns = "Cardano.Node.BlockFetchClient"; detail = "DBrief";}
+                  {ns = ""; detail = "DNormal";}
+                  {ns = "Cardano.Node.BlockFetchClient"; detail = "DMinimal";}
                ];
 
                TraceOptionBackend = [

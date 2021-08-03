@@ -125,9 +125,9 @@ docPeers = Documented [
     ]
 
 instance LogFormatting [PeerT blk] where
-  forMachine DBrief _ = mkObject [ "kind"  .= String "NodeKernelPeers"]
-  forMachine _ []     = mkObject [ "kind"  .= String "NodeKernelPeers"]
-  forMachine dtal xs  = mkObject
+  forMachine DMinimal _ = mkObject [ "kind"  .= String "NodeKernelPeers"]
+  forMachine _ []       = mkObject [ "kind"  .= String "NodeKernelPeers"]
+  forMachine dtal xs    = mkObject
     [ "kind"  .= String "NodeKernelPeers"
     , "peers" .= toJSON (foldl' (\acc x -> forMachine dtal x : acc) [] xs)
     ]

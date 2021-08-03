@@ -211,9 +211,9 @@ instance ConvertRawHash blk
 
 instance (LogFormatting peer, Show peer)
       => LogFormatting [TraceLabelPeer peer (FetchDecision [Point header])] where
-  forMachine DBrief _ = emptyObject
-  forMachine _ [] = emptyObject
-  forMachine _ xs = mkObject
+  forMachine DMinimal _ = emptyObject
+  forMachine _ []       = emptyObject
+  forMachine _ xs       = mkObject
     [ "kind"  .= String "PeersFetch"
     , "peers" .= toJSON
       (foldl' (\acc x -> forMachine DDetailed x : acc) [] xs) ]

@@ -176,7 +176,7 @@ instance ( ConvertTxId' blk
          , LedgerSupportsMempool blk
          )
       => LogFormatting (AnyMessageAndAgency (BlockFetch blk (Point blk))) where
-  forMachine DBrief (AnyMessageAndAgency stok (MsgBlock blk)) =
+  forMachine DMinimal (AnyMessageAndAgency stok (MsgBlock blk)) =
     mkObject [ "kind" .= String "MsgBlock"
              , "agency" .= String (pack $ show stok)
              , "blockHash" .= renderHeaderHash (Proxy @blk) (blockHash blk)
@@ -221,7 +221,7 @@ instance ( ConvertTxId' blk
          , HasTxs blk
          )
       => LogFormatting (AnyMessageAndAgency (BlockFetch (Serialised blk) (Point blk))) where
-  forMachine DBrief (AnyMessageAndAgency stok (MsgBlock _blk)) =
+  forMachine DMinimal (AnyMessageAndAgency stok (MsgBlock _blk)) =
     mkObject [ "kind" .= String "MsgBlock"
              , "agency" .= String (pack $ show stok)
             -- , "blockHash" .= renderHeaderHash (Proxy @blk) (blockHash blk)

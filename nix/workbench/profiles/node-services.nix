@@ -67,8 +67,8 @@ let
                ];
 
                TraceOptionDetail = [
-                 {ns = ""; detail = "DRegular";}
-                 ## {ns = "Node.BlockFetchClient"; detail = "DBrief";}
+                 {ns = ""; detail = "DNormal";}
+                 ## {ns = "Node.BlockFetchClient"; detail = "DMinimal";}
                ];
 
                TraceOptionBackend = [

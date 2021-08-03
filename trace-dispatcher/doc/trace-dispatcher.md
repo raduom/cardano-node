@@ -309,7 +309,7 @@ class LogFormatting a where
   forMachine :: DetailLevel -> a -> A.Object
 
   forHuman :: a -> Text
-  forHuman = forMachine DRegular
+  forHuman = forMachine DNormal
 
   asMetrics :: a -> [Metric]
   asMetrics v = []
@@ -362,7 +362,7 @@ An aspect of __trace presentation__ is the amount of details presented for each 
 This detail level control is expressed by:
 
 ```haskell
-data DetailLevel = DBrief | DRegular | DDetailed
+data DetailLevel = DMinimal | DNormal | DDetailed | DMaximum
 ```
 
 ## Fold-based aggregation
@@ -470,7 +470,7 @@ These are the options that can be configured based on a namespace:
 data ConfigOption =
     -- | Severity level for filtering (default is WarningF)
     CoSeverity SeverityF
-    -- | Detail level of message representation (Default is DRegular)
+    -- | Detail level of message representation (Default is DNormal)
   | CoDetail DetailLevel
   -- | To which backend to pass
   -- Default is [EKGBackend, Forwarder, Stdout HumanFormatColoured]
@@ -691,7 +691,7 @@ The generated documentation for a simple message my look like this:
 >   >
 >   >   Privacy:   `Public`
 >   >
->   >   Details:   `DRegular`
+>   >   Details:   `DNormal`
 >
 >   Backends: `KatipBackend ""` / `Machine`, `KatipBackend ""` / `Human`
 >

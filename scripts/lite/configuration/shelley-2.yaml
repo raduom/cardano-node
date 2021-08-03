@@ -269,9 +269,9 @@ TraceOptionSeverity:
     severity: DebugF
 TraceOptionDetail:
   - ns: ''
-    detail: DRegular
+    detail: DNormal
   - ns: Node.BlockFetchClient
-    detail: DBrief
+    detail: DMinimal
 TraceOptionBackend:
   - ns: ''
     backends:

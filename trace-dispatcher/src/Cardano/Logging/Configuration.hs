@@ -45,7 +45,7 @@ defaultConfig = emptyTraceConfig {
   tcOptions = Map.fromList
     [([] :: Namespace,
          [ CoSeverity InfoF
-         , CoDetail DRegular
+         , CoDetail DNormal
          , CoBackend [Stdout HumanFormatColoured]
          ])
     ]
@@ -213,7 +213,7 @@ withDetailsFromConfig =
     getDetails
     (\mbDtl b -> case mbDtl of
               Just dtl -> pure $ setDetails dtl b
-              Nothing  -> pure $ setDetails DRegular b)
+              Nothing  -> pure $ setDetails DNormal b)
 
 -- | Routing and formatting of a trace from the config
 withBackendsFromConfig :: (MonadIO m) =>
@@ -301,10 +301,10 @@ getSeverity config ns = pure $
     severitySelector (CoSeverity s) = Just s
     severitySelector _              = Nothing
 
--- | If no details can be found in the config, it is set to DRegular
+-- | If no details can be found in the config, it is set to DNormal
 getDetails :: Applicative m => TraceConfig -> Namespace -> m DetailLevel
 getDetails config ns = pure $
-    fromMaybe DRegular (getOption detailSelector config ns)
+    fromMaybe DNormal (getOption detailSelector config ns)
   where
     detailSelector :: ConfigOption -> Maybe DetailLevel
     detailSelector (CoDetail d) = Just d

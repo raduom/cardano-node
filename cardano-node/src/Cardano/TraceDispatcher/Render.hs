@@ -173,6 +173,6 @@ renderChainHash p (BlockHash hash) = p hash
 trimHashTextForDetails :: DetailLevel -> Text -> Text
 trimHashTextForDetails dtal =
   case dtal of
-    DBrief    -> Text.take 7
-    DRegular  -> id
+    DMinimal  -> Text.take 7
+    DNormal   -> id
     DDetailed -> id

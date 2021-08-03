@@ -146,8 +146,8 @@ documentMarkdown (Documented documented) tracers = do
         [case forHuman dmPrototype of
           "" -> mempty
           t  -> fromText "For human:\n" <> asCode (fromText t)
-        , let r1 = forMachine DBrief dmPrototype
-              r2 = forMachine DRegular dmPrototype
+        , let r1 = forMachine DMinimal dmPrototype
+              r2 = forMachine DNormal dmPrototype
               r3 = forMachine DDetailed dmPrototype
           in if r1 == mempty && r2 == mempty && r3 == mempty
             then mempty
@@ -211,7 +211,7 @@ documentMarkdown (Documented documented) tracers = do
     configBuilder LogDoc {..} =
       fromText "From current configuration:\n"
       <> case nub ldDetails of
-          []  -> fromText "Details:   " <> asCode (fromString (show DRegular))
+          []  -> fromText "Details:   " <> asCode (fromString (show DNormal))
           [d] -> fromText "Details:   " <> asCode (fromString (show d))
           l   -> fromText "Details:   "
                   <> mconcat (intersperse (singleton ',')
