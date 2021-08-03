@@ -1,15 +1,17 @@
 import           Test.Tasty
 
 import           Cardano.Logging ()
-import qualified Cardano.Logging.Test.Filtering as Filtering
+
+import           Test.Tasty.QuickCheck
+
+import           Cardano.Logging.Test.Config
+import           Cardano.Logging.Test.Filtering
 
 
 main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
-tests =
-  testGroup "trace-dispatcher"
-    [ Filtering.tests
---    , Test.Rotator.tests
+tests = localOption (QuickCheckTests 3) $ testGroup "trace-dispatcher"
+    [ testProperty "not-filtered" $ propFiltering standardConfig
     ]

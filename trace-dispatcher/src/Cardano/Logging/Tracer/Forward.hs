@@ -90,12 +90,11 @@ instance ShowProxy TraceObject
 forwardTracer :: forall m. (MonadIO m)
   => TraceConfig
   -> m (Trace m FormattedMessage)
-forwardTracer config = do
-    tbQueue <- liftIO $ newTBQueueIO
-                          (fromIntegral (tcForwarderQueueSize config))
-    store <- liftIO $ EKG.newStore
-    liftIO $ EKG.registerGcMetrics store
-    liftIO $ launchForwardersSimple (tcForwarder config) tbQueue store
+forwardTracer config = liftIO $ do
+    tbQueue <- newTBQueueIO (fromIntegral (tcForwarderQueueSize config))
+    store <- EKG.newStore
+    EKG.registerGcMetrics store
+    launchForwardersSimple (tcForwarder config) tbQueue store
 --    stateRef <- liftIO $ newIORef (ForwardTracerState tbQueue)
     pure $ Trace $ T.arrow $ T.emit $ uncurry3 (output tbQueue)
   where

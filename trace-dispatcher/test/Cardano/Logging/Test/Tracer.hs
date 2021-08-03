@@ -10,7 +10,9 @@ import           Control.Monad.IO.Class
 
 import           Cardano.Logging
 
-testTracer :: MonadIO m => IORef [FormattedMessage] -> m (Trace m FormattedMessage)
+testTracer :: MonadIO m
+  => IORef [FormattedMessage]
+  -> m (Trace m (FormattedMessage))
 testTracer ioRef = liftIO $ do
     pure $ Trace $ arrow $ emit $ output
   where

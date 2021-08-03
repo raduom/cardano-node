@@ -59,31 +59,31 @@ showT = pack . show
 instance LogFormatting Message where
   forMachine _dtal (Message1 mid i) =
     mkObject [ "kind" .= String "Message1"
+             , "mid" .= ("<" <> showT mid <> ">")
              , "workload" .= String (showT i)
-             , "mid" .= String (showT mid)
              ]
   forMachine DMinimal (Message2 mid _s) =
-    mkObject [ "kind" .= String "Message2"
-             , "mid" .= String (showT mid)
+    mkObject [ "mid" .= ("<" <> showT mid <> ">")
+             , "kind" .= String "Message2"
              ]
   forMachine _dtal (Message2 mid s) =
     mkObject [ "kind" .= String "Message2"
+             , "mid" .= String ("<" <> showT mid <> ">")
              , "workload" .= String s
-             , "mid" .= String (showT mid)
              ]
   forMachine _dtal (Message3 mid d) =
     mkObject [ "kind" .= String "Message3"
-             , "workload" .= String (showT d)
              , "mid" .= String (showT mid)
+             , "workload" .= String (showT d)
              ]
   forHuman (Message1 mid i) =
-      "Message1 " <> showT mid <> " " <> showT i
+      "Message1 <" <> showT mid <> "> " <> showT i
   forHuman (Message2 mid s) =
-      "Message2 " <> showT mid <> " " <> s
+      "Message2 <" <> showT mid <> "> " <> s
   forHuman (Message3 mid d) =
-      "Message3 " <> showT mid <> " " <> showT d
-  asMetrics (Message1 _ i) =
-      [IntM ["Metrics1"] (fromIntegral i)]
+      "Message3 <" <> showT mid <> "> " <> showT d
+  asMetrics (Message1 mid _i) =
+      [IntM ["Metrics1"] (fromIntegral mid)]
   asMetrics _ = []
 
 instance Arbitrary Message where

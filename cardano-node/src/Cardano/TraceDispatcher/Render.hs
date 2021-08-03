@@ -174,5 +174,4 @@ trimHashTextForDetails :: DetailLevel -> Text -> Text
 trimHashTextForDetails dtal =
   case dtal of
     DMinimal  -> Text.take 7
-    DNormal   -> id
-    DDetailed -> id
+    _         -> id
