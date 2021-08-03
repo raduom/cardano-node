@@ -74,7 +74,7 @@ forwardFormatter application (Trace tr) = do
           time <- liftIO getCurrentTime
           let fh = forHuman v
               details = case lcDetails lc of
-                          Nothing  -> DRegular
+                          Nothing  -> DNormal
                           Just dtl -> dtl
               fm = forMachine details v
               nlc = lc { lcNamespace = application : lcNamespace lc}
@@ -87,7 +87,7 @@ forwardFormatter application (Trace tr) = do
                                       Nothing -> Info
                                       Just s  -> s
                     , toDetails   = case lcDetails lc of
-                                      Nothing -> DRegular
+                                      Nothing -> DNormal
                                       Just d  -> d
                     , toTimestamp = time
                     , toHostname  = hn
@@ -108,7 +108,7 @@ forwardFormatter application (Trace tr) = do
                                       Nothing -> Info
                                       Just s  -> s
                     , toDetails   = case lcDetails lc of
-                                      Nothing -> DRegular
+                                      Nothing -> DNormal
                                       Just d  -> d
                     , toTimestamp = time
                     , toHostname  = hn
@@ -199,7 +199,7 @@ machineFormatter application (Trace tr) = do
       \case
         (lc, Nothing, v) -> do
           let detailLevel = case lcDetails lc of
-                              Nothing -> DRegular
+                              Nothing -> DNormal
                               Just dl -> dl
           obj <- liftIO $ formatContextMachine hn application lc (forMachine detailLevel v)
           T.traceWith tr (lc { lcNamespace = application : lcNamespace lc}
@@ -250,7 +250,7 @@ preFormatted backends tr@(Trace tr')=
         then Trace $ T.contramap
               (\ (lc, mbC, msg) ->
                 let dtal = case lcDetails lc of
-                            Nothing  -> DRegular
+                            Nothing  -> DNormal
                             Just dtl -> dtl
                 in (lc, mbC, PreFormatted msg Nothing (Just (forMachine dtal msg))))
               tr'

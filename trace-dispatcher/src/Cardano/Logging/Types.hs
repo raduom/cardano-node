@@ -84,7 +84,7 @@ class LogFormatting a where
   -- No human representation is represented by the empty text
   -- The default implementation returns no human representation
   forHuman :: a -> Text
-  forHuman v = toStrict (AE.encodeToLazyText (forMachine DRegular v))
+  forHuman v = toStrict (AE.encodeToLazyText (forMachine DNormal v))
 
   -- | Metrics representation.
   -- No metrics by default
@@ -143,9 +143,10 @@ emptyLoggingContext = LoggingContext [] Nothing Nothing Nothing
 
 -- | Formerly known as verbosity
 data DetailLevel =
-      DBrief
-    | DRegular
+      DMinimal
+    | DNormal
     | DDetailed
+    | DMaximum
   deriving (Show, Eq, Ord, Bounded, Enum, Generic)
 
 instance AE.ToJSON DetailLevel where
@@ -243,7 +244,7 @@ data FormatLogging =
 data ConfigOption =
     -- | Severity level for a filter (default is WarningF)
     CoSeverity SeverityF
-    -- | Detail level (default is DRegular)
+    -- | Detail level (default is DNormal)
   | CoDetail DetailLevel
   -- | To which backend to pass
   --   Default is [EKGBackend, Forwarder, Stdout HumanFormatColoured]

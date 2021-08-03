@@ -10,7 +10,7 @@ standardConfig = emptyTraceConfig {
   tcOptions = fromList
     [([] :: Namespace,
          [ CoSeverity DebugF
-         , CoDetail DRegular
+         , CoDetail DNormal
          , CoBackend [Stdout HumanFormatColoured, Forwarder, EKGBackend]
          ])
     ]
