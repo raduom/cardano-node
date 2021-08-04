@@ -1,20 +1,69 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Logging.Test.Script
- (
-    playScript
+  (
+    runScriptSimple
   ) where
 
 import           Control.Concurrent (threadDelay)
 import           Control.Monad (when)
 import           Data.IORef (newIORef, readIORef)
 import           Data.List (sort)
+import           Test.QuickCheck
 
 import           Cardano.Logging
 import           Cardano.Logging.Test.Messages
 import           Cardano.Logging.Test.Tracer
+import           Cardano.Logging.Test.Types
 
 import           Debug.Trace
+
+runScriptSimple ::
+     TraceConfig
+  -> (TraceConfig -> ScriptRes -> Property)
+  -> Double
+  -> Property
+runScriptSimple conf oracle time = do
+  let scriptGen  :: Gen Script = arbitrary
+  forAll scriptGen (\ script -> ioProperty $ do
+    scriptResult <- playScript conf script time
+    trace ("stdoutTrRes " <> show (srStdoutRes scriptResult)
+            <> " forwardTrRes " <> show (srForwardRes scriptResult)
+            <> " ekgTrRes " <> show (srEkgRes scriptResult)) $
+      pure $ oracle conf scriptResult)
+
+-- | Duration of the test is given by time in seconds
+playScript :: TraceConfig -> Script -> Double -> IO ScriptRes
+playScript config (Script msgs) time = do
+  stdoutTrRef     <- newIORef []
+  stdoutTracer'   <- testTracer stdoutTrRef
+  forwardTrRef    <- newIORef []
+  forwardTracer'  <- testTracer forwardTrRef
+  ekgTrRef        <- newIORef []
+  ekgTracer'      <- testTracer ekgTrRef
+  tr              <- mkCardanoTracer
+                      "Test"
+                      namesForMessage
+                      severityForMessage
+                      privacyForMessage
+                      stdoutTracer'
+                      forwardTracer'
+                      (Just ekgTracer')
+  let sortedMsgs = sort msgs
+  let (msgsWithIds,_) = withMessageIds 0 sortedMsgs
+  let timedMessages = map (withTimeFactor time) msgsWithIds
+
+  configureTracers config docMessage [tr]
+  trace ("playScript " <> show timedMessages) $
+    playIt (Script timedMessages) tr 0.0
+  r1 <- readIORef stdoutTrRef
+  r2 <- readIORef forwardTrRef
+  r3 <- readIORef ekgTrRef
+  pure (ScriptRes
+          (Script timedMessages)
+          (reverse r1)
+          (reverse r2)
+          (reverse r3))
 
 -- | Adds a message id to every message.
 -- MessageId gives the id to start with.
@@ -27,34 +76,9 @@ withMessageIds mid sMsgs = go mid sMsgs []
     go mid' (ScriptedMessage time msg : tl) acc =
       go (mid' + 1) tl (ScriptedMessage time (setMessageID msg mid') : acc)
 
--- | Duration of the test is always ten seconds
-playScript :: TraceConfig -> Script -> IO ([FormattedMessage],[FormattedMessage],[FormattedMessage])
-playScript config (Script msgs) = do
-  stdoutTrRef     <- newIORef []
-  stdoutTracer'   <- testTracer stdoutTrRef
-  forwardTrRef    <- newIORef []
-  forwardTracer'  <- testTracer forwardTrRef
-  ekgTrRef        <- newIORef []
-  ekgTracer'      <- testTracer ekgTrRef
-  tr              <- mkCardanoTracer
-                      "Cardano"
-                      namesForMessage
-                      severityForMessage
-                      privacyForMessage
-                      stdoutTracer'
-                      forwardTracer'
-                      (Just ekgTracer')
-  let sortedMsgs = sort msgs
-  let (msgsWithIds,_) = withMessageIds 0 sortedMsgs
-
-  configureTracers config docMessage [tr]
-  trace ("playScript " <> show msgsWithIds) $
-    playIt (Script msgsWithIds) tr 0.0
-  r1 <- readIORef stdoutTrRef
-  r2 <- readIORef forwardTrRef
-  r3 <- readIORef ekgTrRef
-  pure (reverse r1, reverse r2, reverse r3)
-
+withTimeFactor :: Double -> ScriptedMessage -> ScriptedMessage
+withTimeFactor factor (ScriptedMessage time msg) =
+    ScriptedMessage (time * factor) msg
 
 -- | Play the current script in one thread
 -- The time is in milliseconds

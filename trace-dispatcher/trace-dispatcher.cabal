@@ -127,7 +127,8 @@ test-suite trace-dispatcher-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             trace-dispatcher-test.hs
-  other-modules:       Cardano.Logging.Test.Filtering
+  other-modules:       Cardano.Logging.Test.Types
+                       Cardano.Logging.Test.Oracles
                        Cardano.Logging.Test.Config
                        Cardano.Logging.Test.Tracer
                        Cardano.Logging.Test.Messages

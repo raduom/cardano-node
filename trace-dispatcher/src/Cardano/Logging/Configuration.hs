@@ -17,6 +17,10 @@ module Cardano.Logging.Configuration
   , withLimitersFromConfig
   , readConfiguration
   , defaultConfig
+
+  , getSeverity
+  , getDetails
+  , getBackends
   ) where
 
 import           Control.Exception (throwIO)
@@ -189,7 +193,7 @@ filterSeverityFromConfig :: (MonadIO m) =>
 filterSeverityFromConfig =
     withNamespaceConfig
       "severity"
-      getSeverity
+      getSeverity'
       (\ mbSev (Trace tr) ->
       pure $ Trace $ T.arrow $ T.emit $
         \case
@@ -210,7 +214,7 @@ withDetailsFromConfig :: (MonadIO m) =>
 withDetailsFromConfig =
   withNamespaceConfig
     "details"
-    getDetails
+    getDetails'
     (\mbDtl b -> case mbDtl of
               Just dtl -> pure $ setDetails dtl b
               Nothing  -> pure $ setDetails DNormal b)
@@ -222,7 +226,7 @@ withBackendsFromConfig :: (MonadIO m) =>
 withBackendsFromConfig routerAndFormatter =
   withNamespaceConfig
     "backends"
-    getBackends
+    getBackends'
     routerAndFormatter
     (Trace T.nullTracer)
 
@@ -290,36 +294,44 @@ withLimitersFromConfig tr trl = do
             T.traceWith tr' (lc, Just c, v)
 
 --------------------------------------------------------
--- Internal
 
 -- | If no severity can be found in the config, it is set to Warning
-getSeverity :: Applicative m => TraceConfig -> Namespace -> m SeverityF
-getSeverity config ns = pure $
+getSeverity :: TraceConfig -> Namespace -> SeverityF
+getSeverity config ns =
     fromMaybe WarningF (getOption severitySelector config ns)
   where
     severitySelector :: ConfigOption -> Maybe SeverityF
     severitySelector (CoSeverity s) = Just s
     severitySelector _              = Nothing
 
+getSeverity' :: Applicative m => TraceConfig -> Namespace -> m SeverityF
+getSeverity' config ns = pure $ getSeverity config ns
+
 -- | If no details can be found in the config, it is set to DNormal
-getDetails :: Applicative m => TraceConfig -> Namespace -> m DetailLevel
-getDetails config ns = pure $
+getDetails :: TraceConfig -> Namespace -> DetailLevel
+getDetails config ns =
     fromMaybe DNormal (getOption detailSelector config ns)
   where
     detailSelector :: ConfigOption -> Maybe DetailLevel
     detailSelector (CoDetail d) = Just d
     detailSelector _            = Nothing
 
+getDetails' :: Applicative m => TraceConfig -> Namespace -> m DetailLevel
+getDetails' config ns = pure $ getDetails config ns
+
 -- | If no backends can be found in the config, it is set to
 -- [EKGBackend, Forwarder, Stdout HumanFormatColoured]
-getBackends :: Applicative m => TraceConfig -> Namespace -> m [BackendConfig]
-getBackends config ns = pure $
+getBackends :: TraceConfig -> Namespace -> [BackendConfig]
+getBackends config ns =
     fromMaybe [EKGBackend, Forwarder, Stdout HumanFormatColoured]
       (getOption backendSelector config ns)
   where
     backendSelector :: ConfigOption -> Maybe [BackendConfig]
     backendSelector (CoBackend s) = Just s
     backendSelector _             = Nothing
+
+getBackends' :: Applicative m => TraceConfig -> Namespace -> m [BackendConfig]
+getBackends' config ns = pure $ getBackends config ns
 
 -- | May return a limiter specification
 getLimiterSpec :: TraceConfig -> Namespace -> Maybe (Text, Double)
