@@ -9,6 +9,7 @@ packages:
     cardano-node-chairman
     cardano-submit-api
     cardano-testnet
+    cardano-tracer
     bench/cardano-topology
     bench/locli
     bench/tx-generator
@@ -63,6 +64,9 @@ package cardano-node-chairman
   tests: True
 
 package cardano-testnet
+  tests: True
+
+package cardano-tracer
   tests: True
 
 package trace-dispatcher
