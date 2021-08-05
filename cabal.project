@@ -14,6 +14,7 @@ packages:
     bench/tx-generator
     trace-dispatcher
     trace-forward
+    trace-forward-demo
 
 package cardano-api
   ghc-options: -Werror
