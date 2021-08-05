@@ -19,7 +19,7 @@ import           Control.Monad.STM (atomically)
 import "contra-tracer" Control.Tracer (nullTracer)
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Fixed (Pico)
-import           Data.Time.Clock (NominalDiffTime, getCurrentTime, secondsToNominalDiffTime)
+import           Data.Time.Clock (NominalDiffTime, UTCTime, getCurrentTime, secondsToNominalDiffTime)
 import           Data.Void (Void)
 import           Data.Word (Word16)
 import           Ouroboros.Network.Driver.Limits (ProtocolTimeLimits)
@@ -44,13 +44,15 @@ import           Cardano.Logging
 
 import qualified Trace.Forward.Configuration as TF
 import           Trace.Forward.Network.Forwarder (forwardTraceObjects)
+import           Trace.Forward.Protocol.Type (NodeInfo (..))
 
 import qualified System.Metrics.Configuration as EKGF
 import           System.Metrics.Network.Forwarder (forwardEKGMetrics)
 
 launchForwardersSimple :: String -> IO ()
-launchForwardersSimple localSock =
-  try (launchForwarders' localSock Nothing (ekgConfig, tfConfig)) >>= \case
+launchForwardersSimple localSock = do
+  now <- getCurrentTime
+  try (launchForwarders' localSock Nothing (ekgConfig, tfConfig now)) >>= \case
     Left (_e :: SomeException) ->
       launchForwardersSimple localSock
     Right _ -> return ()
@@ -64,13 +66,20 @@ launchForwardersSimple localSock =
       , EKGF.actionOnRequest    = const (return ())
       }
 
-  tfConfig :: TF.ForwarderConfiguration TraceObject
-  tfConfig =
+  tfConfig :: UTCTime -> TF.ForwarderConfiguration TraceObject
+  tfConfig now =
     TF.ForwarderConfiguration
       { TF.forwarderTracer  = nullTracer
       , TF.acceptorEndpoint = TF.LocalPipe localSock
-      , TF.nodeBasicInfo    = return [("NodeName", "node-1")]
-      , TF.actionOnRequest  = const (return ())
+      , TF.nodeBasicInfo    = return
+        NodeInfo
+        { niName            = "core-1"
+        , niProtocol        = "Shelley"
+        , niVersion         = "1.28.0"
+        , niCommit          = "abcdefg"
+        , niStartTime       = now
+        , niSystemStartTime = now
+        }
       }
 
 launchForwarders'

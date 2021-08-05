@@ -19,6 +19,7 @@ import           Cardano.Logging (DetailLevel (..), SeverityS (..), TraceObject 
 import           Trace.Forward.Forwarder (runTraceForwarder)
 import           Trace.Forward.Configuration (ForwarderConfiguration (..),
                                               HowToConnect (..), Port)
+import           Trace.Forward.Protocol.Type (NodeInfo (..))
 
 main :: IO ()
 main = do
@@ -27,13 +28,21 @@ main = do
     [path]       -> return $ LocalPipe path
     [host, port] -> return $ RemoteSocket (pack host) (read port :: Port)
     _            -> die "Usage: demo-forwarder (pathToLocalPipe | host port)"
+  now <- getCurrentTime
   let config :: ForwarderConfiguration TraceObject
       config =
         ForwarderConfiguration
           { forwarderTracer  = contramap show stdoutTracer
           , acceptorEndpoint = howToConnect
-          , nodeBasicInfo    = return [("NodeName", "node-1")]
-          , actionOnRequest  = print -- const (return ())
+          , nodeBasicInfo    = return
+            NodeInfo
+            { niName            = "core-1"
+            , niProtocol        = "Shelley"
+            , niVersion         = "1.28.0"
+            , niCommit          = "abcdefg"
+            , niStartTime       = now
+            , niSystemStartTime = now
+            }
           }
 
   -- Create a queue for 'TraceObject's: when the acceptor will ask for N 'TraceObject's

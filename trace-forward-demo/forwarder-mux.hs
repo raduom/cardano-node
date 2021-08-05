@@ -13,7 +13,7 @@ import "contra-tracer" Control.Tracer (contramap, nullTracer, stdoutTracer)
 import           Data.Fixed (Pico)
 import           Data.Maybe (isJust)
 import           Data.Text (pack)
-import           Data.Time.Clock (NominalDiffTime, getCurrentTime, secondsToNominalDiffTime)
+import           Data.Time.Clock (NominalDiffTime, UTCTime, getCurrentTime, secondsToNominalDiffTime)
 import           Data.Void (Void)
 import           Data.Word (Word16)
 import           System.Environment (getArgs)
@@ -47,6 +47,7 @@ import           Cardano.Logging (DetailLevel (..), SeverityS (..), TraceObject 
 
 import qualified Trace.Forward.Configuration as TF
 import           Trace.Forward.Network.Forwarder (forwardTraceObjects)
+import           Trace.Forward.Protocol.Type (NodeInfo (..))
 
 import qualified System.Metrics.Configuration as EKGF
 import           System.Metrics.Network.Forwarder (forwardEKGMetrics)
@@ -87,8 +88,9 @@ main = do
                    )
           _ ->
             die "Usage: demo-forwarder-mux (pathToLocalPipe | host port) freqInSecs [-b fillFreqInSecs]"
-  let configs = mkConfigs howToConnect freq benchFillFreq
-  
+
+  configs <- mkConfigs howToConnect freq benchFillFreq <$> getCurrentTime
+
   case reConnectTest of
     Nothing -> launchForwarders howToConnect benchFillFreq configs
     Just rcFreq -> runReConnector (launchForwarders howToConnect benchFillFreq configs) rcFreq
@@ -97,8 +99,9 @@ mkConfigs
   :: HowToConnect
   -> Pico
   -> Maybe Pico
-  -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
-mkConfigs howToConnect freq benchFillFreq = (ekgConfig, tfConfig)
+  -> UTCTime
+  -> IO (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
+mkConfigs howToConnect freq benchFillFreq now = (ekgConfig, tfConfig)
  where
   ekgConfig =
     EKGF.ForwarderConfiguration
@@ -111,8 +114,15 @@ mkConfigs howToConnect freq benchFillFreq = (ekgConfig, tfConfig)
     TF.ForwarderConfiguration
       { TF.forwarderTracer  = if benchMode then nullTracer else contramap show stdoutTracer
       , TF.acceptorEndpoint = forTF howToConnect
-      , TF.nodeBasicInfo    = return [("NodeName", "node-1")]
-      , TF.actionOnRequest  = const (return ())
+      , TF.nodeBasicInfo    = pure
+          NodeInfo
+          { niName            = "core-1"
+          , niProtocol        = "Shelley"
+          , niVersion         = "1.28.0"
+          , niCommit          = "abcdefg"
+          , niStartTime       = now
+          , niSystemStartTime = now
+          }
       }
 
   forTF (LocalPipe p)      = TF.LocalPipe p

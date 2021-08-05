@@ -32,8 +32,7 @@ import           Ouroboros.Consensus.Block (ConvertRawHash, GetHeader,
                      getHeader)
 import           Ouroboros.Consensus.Ledger.Query (Query)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (GenTx, HasTxId,
-                     HasTxs, LedgerSupportsMempool, extractTxs,
-                     txForgetValidated, txId)
+                     HasTxs, LedgerSupportsMempool, extractTxs, txId)
 import           Ouroboros.Consensus.Node.Run (SerialiseNodeToNodeConstraints,
                      estimateBlockSize)
 
@@ -188,7 +187,7 @@ instance ( ConvertTxId' blk
              , "agency" .= String (pack $ show stok)
              , "blockHash" .= renderHeaderHash (Proxy @blk) (blockHash blk)
              , "blockSize" .= toJSON (estimateBlockSize (getHeader blk))
-             , "txIds" .= toJSON (presentTx <$> map txForgetValidated (extractTxs blk))
+             , "txIds" .= toJSON (presentTx <$> extractTxs blk)
              ]
       where
         presentTx :: GenTx blk -> Value

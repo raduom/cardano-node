@@ -30,6 +30,7 @@ import           GHC.Generics (Generic)
 import qualified Control.Tracer as T
 import           "contra-tracer" Control.Tracer (contramap, stdoutTracer)
 import qualified Data.ByteString.Lazy as LBS
+import           Data.Time.Clock (UTCTime, getCurrentTime)
 import           Data.Void (Void)
 import           Data.Word (Word16)
 
@@ -62,6 +63,7 @@ import qualified System.Metrics.Configuration as EKGF
 import           System.Metrics.Network.Forwarder (forwardEKGMetricsResp)
 import qualified Trace.Forward.Configuration as TF
 import           Trace.Forward.Network.Forwarder (forwardTraceObjectsResp)
+import           Trace.Forward.Protocol.Type (NodeInfo (..))
 
 import           Cardano.Logging.DocuGenerator
 import           Cardano.Logging.Types
@@ -113,15 +115,18 @@ forwardTracer config = liftIO $ do
     output _tbQueue LoggingContext {} _ _a = pure ()
 
 launchForwardersSimple :: RemoteAddr -> TBQueue TraceObject -> EKG.Store -> IO ()
-launchForwardersSimple endpoint tbQueue store =
-  void . forkIO $ launchForwardersSimple'
+launchForwardersSimple endpoint tbQueue store = do
+  now <- getCurrentTime
+  -- XXX: parametrise the NodeInfo with proper timestamps! (skosyrev)
+  void . forkIO $ launchForwardersSimple' now
  where
-  launchForwardersSimple' =
-    try (launchForwarders' endpoint (ekgConfig, tfConfig) tbQueue store) >>= \case
+  launchForwardersSimple' now =
+    try (launchForwarders' endpoint (ekgConfig, tfConfig now) tbQueue store)
+    >>= \case
       Left (_e :: SomeException) ->
         -- There is some problem with the connection with the acceptor, try it again.
         -- TODO JNF What if it runs in an infinite loop?
-        launchForwardersSimple'
+        launchForwardersSimple' now
       Right _ ->
         pure () -- Actually, the function 'connectToNode' never returns.
 
@@ -134,19 +139,20 @@ launchForwardersSimple endpoint tbQueue store =
       , EKGF.actionOnRequest    = const (return ())
       }
 
-  tfConfig :: TF.ForwarderConfiguration TraceObject
-  tfConfig =
+  tfConfig :: UTCTime -> TF.ForwarderConfiguration TraceObject
+  tfConfig now =
     TF.ForwarderConfiguration
       { TF.forwarderTracer  = contramap show stdoutTracer
       , TF.acceptorEndpoint = forTF endpoint
-      , TF.nodeBasicInfo    = return
-                                [ ("NodeName",      "core-1")
-                                , ("NodeProtocol",  "Shelley")
-                                , ("NodeRelease",   "1.27.0")
-                                , ("NodeCommit",    "abcdefg")
-                                , ("NodeStartTime", "2021 06 04 14:34:07 UTC")
-                                ]
-      , TF.actionOnRequest  = const (return ())
+      , TF.getNodeInfo      = pure
+          NodeInfo
+          { niName            = "core-1"
+          , niProtocol        = "Shelley"
+          , niVersion         = "1.28.0"
+          , niCommit          = "abcdefg"
+          , niStartTime       = now
+          , niSystemStartTime = now
+          }
       }
 
   forTF (LocalSocket p)   = TF.LocalPipe p
