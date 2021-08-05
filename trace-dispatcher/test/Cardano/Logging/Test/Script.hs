@@ -18,23 +18,24 @@ import           Cardano.Logging.Test.Types
 
 import           Debug.Trace
 
+-- | Run a script in a single thread and uses the oracle to test for correctness
+--   The duration of the test is given by time in seconds
 runScriptSimple ::
-     TraceConfig
+     Double
   -> (TraceConfig -> ScriptRes -> Property)
-  -> Double
   -> Property
-runScriptSimple conf oracle time = do
-  let scriptGen  :: Gen Script = arbitrary
+runScriptSimple time oracle = do
+  let (scriptGen, conf)  :: Gen (Script, TraceConfig) = arbitrary
   forAll scriptGen (\ script -> ioProperty $ do
-    scriptResult <- playScript conf script time
-    trace ("stdoutTrRes " <> show (srStdoutRes scriptResult)
-            <> " forwardTrRes " <> show (srForwardRes scriptResult)
-            <> " ekgTrRes " <> show (srEkgRes scriptResult)) $
-      pure $ oracle conf scriptResult)
+    scriptResult <- playScript time conf script
+    -- trace ("stdoutTrRes " <> show (srStdoutRes scriptResult)
+    --         <> " forwardTrRes " <> show (srForwardRes scriptResult)
+    --         <> " ekgTrRes " <> show (srEkgRes scriptResult)) $
+    pure $ oracle conf scriptResult)
 
--- | Duration of the test is given by time in seconds
-playScript :: TraceConfig -> Script -> Double -> IO ScriptRes
-playScript config (Script msgs) time = do
+-- | Plays a script in a single thread
+playScript :: Double -> TraceConfig -> Script -> IO ScriptRes
+playScript time config (Script msgs) = do
   stdoutTrRef     <- newIORef []
   stdoutTracer'   <- testTracer stdoutTrRef
   forwardTrRef    <- newIORef []
@@ -54,8 +55,8 @@ playScript config (Script msgs) time = do
   let timedMessages = map (withTimeFactor time) msgsWithIds
 
   configureTracers config docMessage [tr]
-  trace ("playScript " <> show timedMessages) $
-    playIt (Script timedMessages) tr 0.0
+  -- trace ("playScript " <> show timedMessages) $
+  playIt (Script timedMessages) tr 0.0
   r1 <- readIORef stdoutTrRef
   r2 <- readIORef forwardTrRef
   r3 <- readIORef ekgTrRef
@@ -64,6 +65,18 @@ playScript config (Script msgs) time = do
           (reverse r1)
           (reverse r2)
           (reverse r3))
+
+-- | Play the current script in one thread
+-- The time is in milliseconds
+playIt :: Script -> Trace IO Message -> Double -> IO ()
+playIt (Script []) _tr _d = pure ()
+playIt (Script (ScriptedMessage d1 m1 : rest)) tr d = do
+  when (d < d1) $
+    trace ("threadDelay " <> show (round ((d1 - d) * 1000) :: Int))
+      $ threadDelay (round ((d1 - d) * 1000000))
+    -- this is in microseconds
+  traceWith tr m1
+  playIt (Script rest) tr d1
 
 -- | Adds a message id to every message.
 -- MessageId gives the id to start with.
@@ -79,13 +92,3 @@ withMessageIds mid sMsgs = go mid sMsgs []
 withTimeFactor :: Double -> ScriptedMessage -> ScriptedMessage
 withTimeFactor factor (ScriptedMessage time msg) =
     ScriptedMessage (time * factor) msg
-
--- | Play the current script in one thread
--- The time is in milliseconds
-playIt :: Script -> Trace IO Message -> Double -> IO ()
-playIt (Script []) _tr _d = pure ()
-playIt (Script (ScriptedMessage d1 m1 : rest)) tr d = do
-  when (d < d1) $
-    threadDelay (round (d1 - d) * 1000)
-  traceWith tr m1
-  playIt (Script rest) tr d1
