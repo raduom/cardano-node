@@ -15,8 +15,10 @@ import           Cardano.Logging
 import           Cardano.Logging.Test.Messages
 import           Cardano.Logging.Test.Tracer
 import           Cardano.Logging.Test.Types
+import           Cardano.Logging.Test.Config()
 
-import           Debug.Trace
+-- import           Debug.Trace
+
 
 -- | Run a script in a single thread and uses the oracle to test for correctness
 --   The duration of the test is given by time in seconds
@@ -25,8 +27,8 @@ runScriptSimple ::
   -> (TraceConfig -> ScriptRes -> Property)
   -> Property
 runScriptSimple time oracle = do
-  let (scriptGen, conf)  :: Gen (Script, TraceConfig) = arbitrary
-  forAll scriptGen (\ script -> ioProperty $ do
+  let generator  :: Gen (Script, TraceConfig) = arbitrary
+  forAll generator (\ (script,conf) -> ioProperty $ do
     scriptResult <- playScript time conf script
     -- trace ("stdoutTrRes " <> show (srStdoutRes scriptResult)
     --         <> " forwardTrRes " <> show (srForwardRes scriptResult)
@@ -71,9 +73,7 @@ playScript time config (Script msgs) = do
 playIt :: Script -> Trace IO Message -> Double -> IO ()
 playIt (Script []) _tr _d = pure ()
 playIt (Script (ScriptedMessage d1 m1 : rest)) tr d = do
-  when (d < d1) $
-    trace ("threadDelay " <> show (round ((d1 - d) * 1000) :: Int))
-      $ threadDelay (round ((d1 - d) * 1000000))
+  when (d < d1) $ threadDelay (round ((d1 - d) * 1000000))
     -- this is in microseconds
   traceWith tr m1
   playIt (Script rest) tr d1

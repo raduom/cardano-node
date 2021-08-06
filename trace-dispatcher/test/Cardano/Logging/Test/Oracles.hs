@@ -26,8 +26,8 @@ oracleFiltering conf ScriptRes {..} =
   where
     oracleMessage :: ScriptedMessage -> Bool
     oracleMessage (ScriptedMessage _t msg) =
-      let filterSeverity = getSeverity conf ("Node" : namesForMessage msg)
-          backends = getBackends conf ("Node" : namesForMessage msg)
+      let filterSeverity = getSeverity conf ("Node" : "Test" : namesForMessage msg)
+          backends = getBackends conf ("Node" : "Test" : namesForMessage msg)
           inStdout = hasStdoutBackend backends
                       && fromEnum (severityForMessage msg) >= fromEnum filterSeverity
           isCorrectStdout = includedExactlyOnce msg srStdoutRes == inStdout
@@ -39,10 +39,24 @@ oracleFiltering conf ScriptRes {..} =
                       && fromEnum (severityForMessage msg) >= fromEnum filterSeverity
                       && not (null (asMetrics msg))
           isCorrectEKG = includedExactlyOnce msg srEkgRes == inEKG
-      -- in trace ("\n *** oracleFiltering isCorrectStdout " <> show isCorrectStdout <>
-      --           " isCorrectForwarder " <> show isCorrectForwarder <>
-      --           " isCorrectEKG " <> show isCorrectEKG) $
-      in trace "\n***" isCorrectStdout && isCorrectForwarder && isCorrectEKG
+          res = isCorrectStdout && isCorrectForwarder && isCorrectEKG
+      in case traceMessage isCorrectStdout isCorrectForwarder isCorrectEKG msg of
+        Nothing -> res
+        Just str -> trace str $ res
+    traceMessage :: Bool -> Bool -> Bool -> Message -> Maybe String
+    traceMessage isCorrectStdout isCorrectForwarder isCorrectEKG msg =
+      if not isCorrectStdout
+        then Just ("stdoutTracer wrong filtering or routing for " <> show msg
+                    <> " config " <> show conf)
+        else if not isCorrectForwarder
+          then Just ("forwardTracer wrong filtering or routing for " <> show msg
+                      <> " config " <> show conf)
+          else if not isCorrectEKG
+            then Just ("ekgTracer wrong filtering or routing for " <> show msg
+                        <> " config " <> show conf)
+            else Nothing
+
+
 
 -- | Is the stdout backend included in this configuration
 hasStdoutBackend :: [BackendConfig] -> Bool
