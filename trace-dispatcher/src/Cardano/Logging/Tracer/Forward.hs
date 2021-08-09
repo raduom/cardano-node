@@ -16,7 +16,7 @@ module Cardano.Logging.Tracer.Forward
 
 import           Codec.CBOR.Term (Term)
 import           Codec.Serialise (Serialise (..))
-import           Control.Concurrent (forkIO)
+import           Control.Concurrent (forkIO, threadDelay)
 import           Control.Concurrent.Async (async, wait, waitAnyCancel)
 import           Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO,
                      writeTBQueue)
@@ -30,7 +30,6 @@ import           GHC.Generics (Generic)
 import qualified Control.Tracer as T
 import           "contra-tracer" Control.Tracer (contramap, stdoutTracer)
 import qualified Data.ByteString.Lazy as LBS
-import           Data.Time.Clock (UTCTime, getCurrentTime)
 import           Data.Void (Void)
 import           Data.Word (Word16)
 
@@ -91,12 +90,13 @@ instance ShowProxy TraceObject
 
 forwardTracer :: forall m. (MonadIO m)
   => TraceConfig
+  -> NodeInfo
   -> m (Trace m FormattedMessage)
-forwardTracer config = liftIO $ do
+forwardTracer config nodeInfo = liftIO $ do
     tbQueue <- newTBQueueIO (fromIntegral (tcForwarderQueueSize config))
     store <- EKG.newStore
     EKG.registerGcMetrics store
-    launchForwardersSimple (tcForwarder config) tbQueue store
+    launchForwarders (tcForwarder config) nodeInfo tbQueue store
 --    stateRef <- liftIO $ newIORef (ForwardTracerState tbQueue)
     pure $ Trace $ T.arrow $ T.emit $ uncurry3 (output tbQueue)
   where
@@ -114,21 +114,21 @@ forwardTracer config = liftIO $ do
       docIt Forwarder (FormattedHuman False "") (lk, Just c, lo)
     output _tbQueue LoggingContext {} _ _a = pure ()
 
-launchForwardersSimple :: RemoteAddr -> TBQueue TraceObject -> EKG.Store -> IO ()
-launchForwardersSimple endpoint tbQueue store = do
-  now <- getCurrentTime
-  -- XXX: parametrise the NodeInfo with proper timestamps! (skosyrev)
-  void . forkIO $ launchForwardersSimple' now
+launchForwarders :: RemoteAddr -> NodeInfo -> TBQueue TraceObject -> EKG.Store -> IO ()
+launchForwarders endpoint nodeInfo tbQueue store = void . forkIO $ launchForwarders'
  where
-  launchForwardersSimple' now =
-    try (launchForwarders' endpoint (ekgConfig, tfConfig now) tbQueue store)
+  launchForwarders' =
+    try (launchForwardersViaLocalSocket endpoint (ekgConfig, tfConfig) tbQueue store)
     >>= \case
-      Left (_e :: SomeException) ->
-        -- There is some problem with the connection with the acceptor, try it again.
+      Left (_e :: SomeException) -> do
+        -- There is some problem with the connection with the acceptor, try it again, after 1 second.
+        threadDelay 1000000
         -- TODO JNF What if it runs in an infinite loop?
-        launchForwardersSimple' now
+        -- TODO DS Probably we have to limit the number of attempts here? For example, try it N times
+        -- (with 1 second delay between attempts) and, if it fails after N-th attempt, just stop.
+        launchForwarders'
       Right _ ->
-        pure () -- Actually, the function 'connectToNode' never returns.
+        pure () -- Actually, the function 'withServerNode' never returns.
 
   ekgConfig :: EKGF.ForwarderConfiguration
   ekgConfig =
@@ -139,32 +139,24 @@ launchForwardersSimple endpoint tbQueue store = do
       , EKGF.actionOnRequest    = const (return ())
       }
 
-  tfConfig :: UTCTime -> TF.ForwarderConfiguration TraceObject
-  tfConfig now =
+  tfConfig :: TF.ForwarderConfiguration TraceObject
+  tfConfig =
     TF.ForwarderConfiguration
       { TF.forwarderTracer  = contramap show stdoutTracer
       , TF.acceptorEndpoint = forTF endpoint
-      , TF.getNodeInfo      = pure
-          NodeInfo
-          { niName            = "core-1"
-          , niProtocol        = "Shelley"
-          , niVersion         = "1.28.0"
-          , niCommit          = "abcdefg"
-          , niStartTime       = now
-          , niSystemStartTime = now
-          }
+      , TF.getNodeInfo      = pure nodeInfo
       }
 
   forTF (LocalSocket p)   = TF.LocalPipe p
   forEKGF (LocalSocket p) = EKGF.LocalPipe p
 
-launchForwarders'
+launchForwardersViaLocalSocket
   :: RemoteAddr
   -> (EKGF.ForwarderConfiguration, TF.ForwarderConfiguration TraceObject)
   -> TBQueue TraceObject
   -> EKG.Store
   -> IO ()
-launchForwarders' (LocalSocket localSock) configs tbQueue store = withIOManager $ \iocp -> do
+launchForwardersViaLocalSocket (LocalSocket localSock) configs tbQueue store = withIOManager $ \iocp -> do
   let snocket = localSnocket iocp localSock
       address = localAddressFromPath localSock
   doListenToAcceptor snocket address noTimeLimitsHandshake configs tbQueue store
