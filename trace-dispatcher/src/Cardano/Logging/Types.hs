@@ -56,7 +56,6 @@ import           Network.HostName (HostName)
 
 -- | The Trace carries the underlying tracer Tracer from the contra-tracer package.
 --   It adds a 'LoggingContext' and maybe a 'TraceControl' to every message.
--- control object
 newtype Trace m a = Trace
   {unpackTrace :: Tracer m (LoggingContext, Maybe TraceControl, a)}
 

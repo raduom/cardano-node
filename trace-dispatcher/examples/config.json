@@ -41,5 +41,9 @@
   ],
   "TraceOptionForwarder": {
     "filePath": "/tmp/forwarder.sock"
-  }
+  },
+  "TraceOptionForwardQueueSize": 1000,  
+  "TraceOptionLimiter": [
+
+  ]
 }

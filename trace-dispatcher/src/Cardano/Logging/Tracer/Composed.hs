@@ -41,17 +41,17 @@ instance (LogFormatting m) => LogFormatting (MessageOrLimit m) where
 -- filtering, detailLevel, frequencyLimiting and backends with formatting before use.
 mkCardanoTracer :: forall evt.
      LogFormatting evt
-  => Text
+  => Trace IO FormattedMessage
+  -> Trace IO FormattedMessage
+  -> Maybe (Trace IO FormattedMessage)
+  -> Text
   -> (evt -> [Text])
   -> (evt -> SeverityS)
   -> (evt -> Privacy)
-  -> Trace IO FormattedMessage
-  -> Trace IO FormattedMessage
-  -> Maybe (Trace IO FormattedMessage)
   -> IO (Trace IO evt)
-mkCardanoTracer name namesFor severityFor privacyFor trStdout trForward mbTrEkg =
-    mkCardanoTracer' name namesFor severityFor privacyFor
-      trStdout trForward mbTrEkg noHook
+mkCardanoTracer trStdout trForward mbTrEkg name namesFor severityFor privacyFor =
+    mkCardanoTracer' trStdout trForward mbTrEkg name namesFor severityFor
+        privacyFor noHook
   where
     noHook :: Trace IO evt -> IO (Trace IO evt)
     noHook tr = pure tr
@@ -59,17 +59,17 @@ mkCardanoTracer name namesFor severityFor privacyFor trStdout trForward mbTrEkg 
 -- | Adds the possibility to add special tracers via the hook function
 mkCardanoTracer' :: forall evt evt1.
      LogFormatting evt1
-  => Text
+  => Trace IO FormattedMessage
+  -> Trace IO FormattedMessage
+  -> Maybe (Trace IO FormattedMessage)
+  -> Text
   -> (evt -> [Text])
   -> (evt -> SeverityS)
   -> (evt -> Privacy)
-  -> Trace IO FormattedMessage
-  -> Trace IO FormattedMessage
-  -> Maybe (Trace IO FormattedMessage)
   -> (Trace IO evt1 -> IO (Trace IO evt))
   -> IO (Trace IO evt)
-mkCardanoTracer' name namesFor severityFor privacyFor
-  trStdout trForward mbTrEkg hook = do
+mkCardanoTracer' trStdout trForward mbTrEkg name namesFor severityFor privacyFor
+  hook = do
     tr    <- withBackendsFromConfig backendsAndFormat
     tr'   <- withLimitersFromConfig (NT.contramap Message tr) (NT.contramap Limit tr)
     tr''  <- hook tr'

@@ -139,7 +139,7 @@ runNode cmdPc = do
         Just fileName -> NL.readConfiguration (unConfigPath fileName)
         Nothing -> putTextLn "No configuration file name found!" >> exitFailure
     baseTrace    <- NL.standardTracer Nothing
-    forwardTrace <- NL.forwardTracer loggerConfiguration
+    forwardTrace <- NL.forwardTracer loggerConfiguration undefined
     mbEkgTrace   <- case llEKGDirect loggingLayer of
                       Nothing -> pure Nothing
                       Just ekgDirect ->

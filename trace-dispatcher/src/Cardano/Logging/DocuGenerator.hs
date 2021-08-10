@@ -9,6 +9,7 @@ module Cardano.Logging.DocuGenerator (
   , docIt
   , addFiltered
   , addLimiter
+  , docTracer
 ) where
 
 import           Cardano.Logging.Types
@@ -25,6 +26,21 @@ import           Data.Text.Lazy.Builder (Builder, fromString, fromText,
                      singleton)
 import           Data.Time (getZonedTime)
 
+docTracer :: MonadIO m
+  => BackendConfig
+  -> m (Trace m (FormattedMessage))
+docTracer backendConfig = liftIO $ do
+    pure $ Trace $ T.arrow $ T.emit $ output
+  where
+    output p@(_, Just Document {}, FormattedMetrics m) =
+        docIt backendConfig (FormattedMetrics m) p
+    output (lk, Just c@Document {}, FormattedForwarder lo) =
+        docIt backendConfig (FormattedHuman False "") (lk, Just c, lo)
+    output (lk, Just c@Document {}, FormattedHuman co msg) =
+       docIt backendConfig (FormattedHuman co "") (lk, Just c, msg)
+    output (lk, Just c@Document {}, FormattedMachine msg) =
+       docIt backendConfig (FormattedMachine "") (lk, Just c, msg)
+    output (_, _, _) = pure ()
 
 documentTracers :: MonadIO m => Documented a -> [Trace m a] -> m DocCollector
 documentTracers (Documented documented) tracers = do
