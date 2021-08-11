@@ -447,12 +447,13 @@ localCreateScriptFunds value count = do
     createCoins coins = do
       let
         selector :: FundSet.FundSource
-        selector = mkFundSource walletRef $ FundSet.selectMinValue $ sum coins + fee
+        selector = mkWalletFundSource walletRef $ FundSet.selectMinValue $ sum coins + fee
         inOut :: [Lovelace] -> [Lovelace]
         inOut = Wallet.includeChange fee coins
         toUTxO = PlutusExample.mkUtxoScript networkId fundKey (script,scriptData) Confirmed
+        fundToStore = mkWalletFundStore walletRef
 
-      tx <- liftIO $ walletCreateCoins walletRef PlutusExample.payToScript selector inOut toUTxO
+      tx <- liftIO $ walletCreateCoins PlutusExample.payToScript selector inOut toUTxO fundToStore
       return $ fmap txInModeCardano tx
   createChangeGeneric createCoins value count
 
@@ -470,13 +471,13 @@ createChangeInEra value count _proxy = do
     createCoins coins = do
       let
         selector :: FundSet.FundSource
-        selector = mkFundSource walletRef $ FundSet.selectMinValue $ sum coins + fee
+        selector = mkWalletFundSource walletRef $ FundSet.selectMinValue $ sum coins + fee
         inOut :: [Lovelace] -> [Lovelace]
         inOut = Wallet.includeChange fee coins
-
         toUTxO = Wallet.mkUTxO networkId fundKey Confirmed
+        fundToStore = mkWalletFundStore walletRef
 
-      (tx :: Either String (Tx era)) <- liftIO $ walletCreateCoins walletRef (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO
+      (tx :: Either String (Tx era)) <- liftIO $ walletCreateCoins (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO fundToStore
       return $ fmap txInModeCardano tx
   createChangeGeneric createCoins value count
 
