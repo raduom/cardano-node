@@ -48,33 +48,6 @@ mkUtxoScript networkId key (script, txOutDatumHash) validity values
     , _fundVariant = PlutusScriptFund
     }
 
--- payToScript to be replaced with genTx
--- need to fix: fee and metadata
-payToScript :: TxGenerator AlonzoEra
-payToScript inFunds outputs
-  = case makeTransactionBody txBodyContent of
-      Left err -> error $ show err
-      Right b -> Right ( signShelleyTransaction b (map (WitnessPaymentKey . getFundKey) inFunds)
-                       , getTxId b)
- where
-  txBodyContent = TxBodyContent {
-      txIns = map (\f -> (getFundTxIn f, BuildTxWith $ KeyWitness KeyWitnessForSpending)) inFunds
-    , txInsCollateral = TxInsCollateralNone
-    , txOuts = outputs
-    , txFee = mkFee 0
-    , txValidityRange = (TxValidityNoLowerBound, TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra)
-    , txMetadata = TxMetadataNone
-    , txAuxScripts = TxAuxScriptsNone
-    , txExtraScriptData = BuildTxWith TxExtraScriptDataNone
-    , txExtraKeyWits = TxExtraKeyWitnessesNone
-    , txProtocolParams = BuildTxWith Nothing
-    , txWithdrawals = TxWithdrawalsNone
-    , txCertificates = TxCertificatesNone
-    , txUpdateProposal = TxUpdateProposalNone
-    , txMintValue = TxMintNone
-    , txScriptValidity = TxScriptValidityNone
-    }
-
 readScript :: FilePath -> IO (Script PlutusScriptV1)
 readScript fp = do
   res <- runExceptT $ readFileScriptInAnyLang fp

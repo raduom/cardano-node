@@ -453,7 +453,7 @@ localCreateScriptFunds value count = do
         toUTxO = PlutusExample.mkUtxoScript networkId fundKey (script,scriptData) Confirmed
         fundToStore = mkWalletFundStore walletRef
 
-      tx <- liftIO $ walletCreateCoins PlutusExample.payToScript selector inOut toUTxO fundToStore
+      tx <- liftIO $ walletCreateCoins (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO fundToStore
       return $ fmap txInModeCardano tx
   createChangeGeneric createCoins value count
 
