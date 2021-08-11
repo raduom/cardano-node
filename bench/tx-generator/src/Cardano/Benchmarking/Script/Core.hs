@@ -306,12 +306,11 @@ localSubmitTx tx = do
   submitTracer <- btTxSubmit_ <$> get BenchTracers
   submit <- getLocalSubmitTx
   ret <- liftIO $ submit tx
-  let
-    msg = case ret of
-      SubmitSuccess -> "local submit success."
-      SubmitFail e -> mconcat
-        [ "local submit failed: " , show e , " (" , show tx , ")"]
-  liftIO $ traceWith submitTracer $ TraceBenchTxSubDebug msg
+  case ret of
+    SubmitSuccess -> return ()
+    SubmitFail e -> do
+      let msg = mconcat [ "local submit failed: " , show e , " (" , show tx , ")"]
+      liftIO $ traceWith submitTracer $ TraceBenchTxSubDebug msg
   return ret
 
 makeMetadata :: forall era. IsShelleyBasedEra era => ActionM (TxMetadataInEra era)
@@ -349,10 +348,13 @@ runBenchmarkInEra (ThreadName threadName) txCount tps era = do
     inToOut :: [Lovelace] -> [Lovelace]
     inToOut = FundSet.inputsToOutputsWithFee fee numOutputs
 
-    txGenerator = genTx fundKey networkId (mkFee fee) metadata
+    txGenerator = genTx (mkFee fee) metadata
+
+    toUTxO :: FundSet.Target -> FundSet.SeqNumber -> ToUTxO era
+    toUTxO target seqNumber = Wallet.mkUTxO networkId fundKey (InFlight target seqNumber)
 
     walletScript :: FundSet.Target -> WalletScript era
-    walletScript = benchmarkWalletScript walletRef txGenerator txCount selector inToOut
+    walletScript = benchmarkWalletScript walletRef txGenerator txCount selector inToOut toUTxO
 
     coreCall :: AsType era -> ExceptT TxGenError IO AsyncBenchmarkControl
     coreCall eraProxy = GeneratorTx.walletBenchmark (btTxSubmit_ tracers) (btN2N_ tracers) connectClient
@@ -448,8 +450,10 @@ localCreateScriptFunds value count = do
         selector :: FundSet.FundSelector
         selector = FundSet.selectMinValue $ sum coins + fee
         inOut :: [Lovelace] -> [Lovelace]
-        inOut = Wallet.includeChange fee coins        
-      tx <- liftIO $ modifyWalletRefEither walletRef (walletCreateCoins (PlutusExample.payToScript fundKey (script, scriptData) networkId) selector inOut)
+        inOut = Wallet.includeChange fee coins
+        toUTxO = PlutusExample.mkUtxoScript networkId fundKey (script,scriptData) Confirmed
+
+      tx <- liftIO $ modifyWalletRefEither walletRef (walletCreateCoins PlutusExample.payToScript selector inOut toUTxO)
       return $ fmap txInModeCardano tx
   createChangeGeneric createCoins value count
 
@@ -470,22 +474,31 @@ createChangeInEra value count _proxy = do
         selector = FundSet.selectMinValue $ sum coins + fee
         inOut :: [Lovelace] -> [Lovelace]
         inOut = Wallet.includeChange fee coins
+
+        toUTxO = Wallet.mkUTxO networkId fundKey Confirmed
         
-      (tx :: Either String (Tx era)) <- liftIO $ modifyWalletRefEither walletRef (walletCreateCoins (genTx fundKey networkId (mkFee fee) TxMetadataNone) selector inOut)
+      (tx :: Either String (Tx era)) <- liftIO $ modifyWalletRefEither walletRef (mkTransactionWithWallet (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO)
       return $ fmap txInModeCardano tx
   createChangeGeneric createCoins value count
 
 createChangeGeneric :: ([Lovelace] -> ActionM (Either String (TxInMode CardanoMode))) -> Lovelace -> Int -> ActionM ()
 createChangeGeneric createCoins value count = do
+  submitTracer <- btTxSubmit_ <$> get BenchTracers
   let
     coinsList = replicate count value
     maxTxSize = 30
     chunks = chunkList maxTxSize coinsList
+    msg = mconcat [ "createChangeGeneric: outputs: ", show $ count
+                  , " value: ", show value
+                  , " number of txs: ", show $ (count + maxTxSize -1) `div` maxTxSize
+                  ]
+  liftIO $ traceWith submitTracer $ TraceBenchTxSubDebug msg
   forM_ chunks $ \coins -> do
     gen <- createCoins coins
     case gen of
       Left err -> throwE $ WalletError err
       Right tx -> void $ localSubmitTx tx
+  liftIO $ traceWith submitTracer $ TraceBenchTxSubDebug "createChangeGeneric: splitting done"
  where
   chunkList :: Int -> [a] -> [[a]]
   chunkList _ [] = []

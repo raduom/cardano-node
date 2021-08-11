@@ -19,22 +19,48 @@ import Cardano.Benchmarking.FundSet
 import Cardano.Benchmarking.GeneratorTx.Tx as Tx (mkFee, mkTxOutValueAdaOnly, keyAddress )
 import Cardano.Benchmarking.Wallet
 
-payToScript ::
-     SigningKey PaymentKey
+mkUtxoScript ::
+     NetworkId
+  -> SigningKey PaymentKey
   -> (Script PlutusScriptV1, Hash ScriptData)
-  -> NetworkId
-  -> TxGenerator AlonzoEra
-payToScript key (script, txOutDatumHash) networkId inFunds outValues validity
+  -> Validity
+  -> ToUTxO AlonzoEra
+mkUtxoScript networkId key (script, txOutDatumHash) validity values
+  = ( map mkTxOut values
+    , newFunds
+    )
+ where
+  mkTxOut v = TxOut plutusScriptAddr (mkTxOutValueAdaOnly v) (TxOutDatumHash ScriptDataInAlonzoEra txOutDatumHash)
+
+  plutusScriptAddr = makeShelleyAddressInEra
+                       networkId
+                       (PaymentCredentialByScript $ hashScript script)
+                       NoStakeAddress
+
+  newFunds txId = zipWith (mkNewFund txId) [TxIx 0 ..] values
+
+  mkNewFund :: TxId -> TxIx -> Lovelace -> Fund
+  mkNewFund txId txIx val = Fund $ InAnyCardanoEra AlonzoEra $ FundInEra {
+      _fundTxIn = TxIn txId txIx
+    , _fundVal = mkTxOutValueAdaOnly val
+    , _fundSigningKey = key
+    , _fundValidity = validity
+    , _fundVariant = PlutusScriptFund
+    }
+
+-- payToScript to be replaced with genTx
+-- need to fix: fee and metadata
+payToScript :: TxGenerator AlonzoEra
+payToScript inFunds outputs
   = case makeTransactionBody txBodyContent of
       Left err -> error $ show err
       Right b -> Right ( signShelleyTransaction b (map (WitnessPaymentKey . getFundKey) inFunds)
-                       , newFunds $ getTxId b
-                       )
+                       , getTxId b)
  where
   txBodyContent = TxBodyContent {
       txIns = map (\f -> (getFundTxIn f, BuildTxWith $ KeyWitness KeyWitnessForSpending)) inFunds
     , txInsCollateral = TxInsCollateralNone
-    , txOuts = map mkTxOut outValues
+    , txOuts = outputs
     , txFee = mkFee 0
     , txValidityRange = (TxValidityNoLowerBound, TxValidityNoUpperBound ValidityNoUpperBoundInAlonzoEra)
     , txMetadata = TxMetadataNone
@@ -47,24 +73,6 @@ payToScript key (script, txOutDatumHash) networkId inFunds outValues validity
     , txUpdateProposal = TxUpdateProposalNone
     , txMintValue = TxMintNone
     , txScriptValidity = TxScriptValidityNone
-    }
-
-  mkTxOut v = TxOut plutusScriptAddr (mkTxOutValueAdaOnly v) (TxOutDatumHash ScriptDataInAlonzoEra txOutDatumHash)
-
-  plutusScriptAddr = makeShelleyAddressInEra
-                       networkId
-                       (PaymentCredentialByScript $ hashScript script)
-                       NoStakeAddress
-
-  newFunds txId = zipWith (mkNewFund txId) [TxIx 0 ..] outValues
-
-  mkNewFund :: TxId -> TxIx -> Lovelace -> Fund
-  mkNewFund txId txIx val = Fund $ InAnyCardanoEra AlonzoEra $ FundInEra {
-      _fundTxIn = TxIn txId txIx
-    , _fundVal = mkTxOutValueAdaOnly val
-    , _fundSigningKey = key
-    , _fundValidity = validity
-    , _fundVariant = PlutusScriptFund
     }
 
 readScript :: FilePath -> IO (Script PlutusScriptV1)
