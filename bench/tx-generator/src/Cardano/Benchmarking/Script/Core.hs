@@ -452,7 +452,7 @@ localCreateScriptFunds value count = do
         inOut = Wallet.includeChange fee coins
         toUTxO = PlutusExample.mkUtxoScript networkId fundKey (script,scriptData) Confirmed
 
-      tx <- liftIO $ modifyWalletRefEither walletRef (walletCreateCoins PlutusExample.payToScript selector inOut toUTxO)
+      tx <- liftIO $ walletCreateCoins walletRef PlutusExample.payToScript selector inOut toUTxO
       return $ fmap txInModeCardano tx
   createChangeGeneric createCoins value count
 
@@ -476,7 +476,7 @@ createChangeInEra value count _proxy = do
 
         toUTxO = Wallet.mkUTxO networkId fundKey Confirmed
 
-      (tx :: Either String (Tx era)) <- liftIO $ modifyWalletRefEither walletRef (walletCreateCoins (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO)
+      (tx :: Either String (Tx era)) <- liftIO $ walletCreateCoins walletRef (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO
       return $ fmap txInModeCardano tx
   createChangeGeneric createCoins value count
 

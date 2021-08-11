@@ -75,19 +75,19 @@ walletExtractFunds w s
     Right funds -> Right (walletUpdateFunds [] funds w, funds)
 
 walletCreateCoins ::
-     TxGenerator era
+     WalletRef
+  -> TxGenerator era
   -> FundSelector
   -> ([Lovelace] -> [Lovelace])
   -> ToUTxO era
-  -> Wallet
-  -> IO (Either String (Wallet, Tx era))
-walletCreateCoins txGenerator selector inToOut mkTxOut wallet = return $ do
+  -> IO (Either String (Tx era))
+walletCreateCoins walletRef txGenerator selector inToOut mkTxOut = modifyWalletRefEither walletRef (\wallet -> return $ do
   inputFunds <- selector (walletFunds wallet)
   let
     outValues = inToOut $ map getFundLovelace inputFunds
     (outputs, toFunds) = mkTxOut outValues
   (tx, txId) <- txGenerator inputFunds outputs
-  return (walletUpdateFunds (toFunds txId) inputFunds wallet, tx)
+  return (walletUpdateFunds (toFunds txId) inputFunds wallet, tx))
 
 benchmarkTransaction ::
      TxGenerator era
