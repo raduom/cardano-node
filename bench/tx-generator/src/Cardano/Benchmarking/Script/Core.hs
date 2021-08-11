@@ -446,8 +446,8 @@ localCreateScriptFunds value count = do
   let
     createCoins coins = do
       let
-        selector :: FundSet.FundSelector
-        selector = FundSet.selectMinValue $ sum coins + fee
+        selector :: FundSet.FundSource
+        selector = mkFundSource walletRef $ FundSet.selectMinValue $ sum coins + fee
         inOut :: [Lovelace] -> [Lovelace]
         inOut = Wallet.includeChange fee coins
         toUTxO = PlutusExample.mkUtxoScript networkId fundKey (script,scriptData) Confirmed
@@ -469,8 +469,8 @@ createChangeInEra value count _proxy = do
     createCoins :: [Lovelace] -> ActionM (Either String (TxInMode CardanoMode))
     createCoins coins = do
       let
-        selector :: FundSet.FundSelector
-        selector = FundSet.selectMinValue $ sum coins + fee
+        selector :: FundSet.FundSource
+        selector = mkFundSource walletRef $ FundSet.selectMinValue $ sum coins + fee
         inOut :: [Lovelace] -> [Lovelace]
         inOut = Wallet.includeChange fee coins
 

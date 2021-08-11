@@ -119,6 +119,7 @@ liftAnyEra f x = case x of
   InAnyCardanoEra AlonzoEra a  ->   InAnyCardanoEra AlonzoEra $ f a
 
 type FundSelector = FundSet -> Either String [Fund]
+type FundSource = IO (Either String [Fund])
 
 -- Select a number of confirmed Fund that where send to a specific Target node.
 -- TODO: dont ignore target.
