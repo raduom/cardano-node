@@ -320,7 +320,6 @@ makeMetadata = do
     Right m -> return m
     Left err -> throwE $ MetadataError err
 
--- TODO use withEra here!
 runBenchmark :: ThreadName -> NumberOfTxs -> TPSRate -> ActionM ()
 runBenchmark threadName txCount tps
   = withEra $ runBenchmarkInEra threadName txCount tps
@@ -476,8 +475,8 @@ createChangeInEra value count _proxy = do
         inOut = Wallet.includeChange fee coins
 
         toUTxO = Wallet.mkUTxO networkId fundKey Confirmed
-        
-      (tx :: Either String (Tx era)) <- liftIO $ modifyWalletRefEither walletRef (mkTransactionWithWallet (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO)
+
+      (tx :: Either String (Tx era)) <- liftIO $ modifyWalletRefEither walletRef (walletCreateCoins (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO)
       return $ fmap txInModeCardano tx
   createChangeGeneric createCoins value count
 

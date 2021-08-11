@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -34,7 +35,6 @@ initWallet network key = newMVar $ Wallet {
   , walletFunds = emptyFunds
   }
 
-
 askWalletRef :: WalletRef -> (Wallet -> a) -> IO a
 askWalletRef r f = do
   w <- readMVar r
@@ -43,9 +43,9 @@ askWalletRef r f = do
 modifyWalletRef :: WalletRef -> (Wallet -> IO (Wallet, a)) -> IO a
 modifyWalletRef = modifyMVar
 
-modifyWalletRefEither :: WalletRef -> (Wallet -> Either err (Wallet,a)) -> IO (Either err a)
+modifyWalletRefEither :: WalletRef -> (Wallet -> IO (Either err (Wallet,a))) -> IO (Either err a)
 modifyWalletRefEither ref action
-  = modifyMVar ref $ \w -> case action w of
+  = modifyMVar ref $ \w -> action w >>= \case
      Right (newWallet, res) -> return (newWallet, Right res)
      Left err -> return (w, Left err)
 
@@ -80,17 +80,8 @@ walletCreateCoins ::
   -> ([Lovelace] -> [Lovelace])
   -> ToUTxO era
   -> Wallet
-  -> Either String (Wallet, Tx era)
-walletCreateCoins = mkTransactionWithWallet
-
-mkTransactionWithWallet ::
-     TxGenerator era
-  -> FundSelector
-  -> ([Lovelace] -> [Lovelace])
-  -> ToUTxO era
-  -> Wallet
-  -> Either String (Wallet, Tx era)
-mkTransactionWithWallet txGenerator selector inToOut mkTxOut wallet = do
+  -> IO (Either String (Wallet, Tx era))
+walletCreateCoins txGenerator selector inToOut mkTxOut wallet = return $ do
   inputFunds <- selector (walletFunds wallet)
   let
     outValues = inToOut $ map getFundLovelace inputFunds
@@ -104,8 +95,8 @@ benchmarkTransaction ::
   -> ([Lovelace] -> [Lovelace])
   -> (SeqNumber -> ToUTxO era)
   -> Wallet
-  -> Either String (Wallet, Tx era)
-benchmarkTransaction txGenerator selector inToOut mkTxOut wallet = do
+  -> IO (Either String (Wallet, Tx era))
+benchmarkTransaction txGenerator selector inToOut mkTxOut wallet = return $ do
   inputFunds <- selector (walletFunds wallet)
   let
     outValues = inToOut $ map getFundLovelace inputFunds
@@ -208,7 +199,7 @@ benchmarkWalletScript wRef txGenerator (NumberOfTxs maxCount) selector inOut toU
   nextTx :: Wallet -> IO (Wallet, WalletStep era)
   nextTx w = if walletSeqNumber w > SeqNumber (fromIntegral maxCount)
     then return (w, Done)
-    else case benchmarkTransaction txGenerator (selector targetNode) inOut (toUTxO targetNode) w of
+    else benchmarkTransaction txGenerator (selector targetNode) inOut (toUTxO targetNode) w >>= \case
       Right (wNew, tx) -> return (wNew, NextTx nextCall tx)
       Left err -> return (w, Error err)
 
