@@ -33,7 +33,7 @@ import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock)
 import           Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraLedgerEvent)
 import           Ouroboros.Consensus.Ledger.Abstract (LedgerState)
-import           Ouroboros.Consensus.Ledger.Monad (AuxLedgerEvent)
+import           Ouroboros.Consensus.Ledger.Basics (AuxLedgerEvent)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock,
                    ShelleyLedgerEvent (ShelleyLedgerEventTICK))
 import           Ouroboros.Consensus.TypeFamilyWrappers
