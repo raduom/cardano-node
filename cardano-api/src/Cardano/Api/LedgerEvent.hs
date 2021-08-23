@@ -9,6 +9,7 @@
 
 module Cardano.Api.LedgerEvent
   ( LedgerEvent (..),
+    MIRDistributionDetails(..),
     toLedgerEvent,
   )
 where
@@ -16,7 +17,7 @@ where
 import           Cardano.Api.Address (StakeCredential, fromShelleyStakeCredential)
 import           Cardano.Api.Block (EpochNo)
 import           Cardano.Api.Certificate (Certificate)
-import           Cardano.Api.Value (Lovelace, fromShelleyLovelace)
+import           Cardano.Api.Value (Lovelace, fromShelleyDeltaLovelace, fromShelleyLovelace)
 import qualified Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Ledger.Core
 import qualified Cardano.Ledger.Credential
@@ -37,7 +38,9 @@ import           Ouroboros.Consensus.Ledger.Basics (AuxLedgerEvent)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock,
                    ShelleyLedgerEvent (ShelleyLedgerEventTICK))
 import           Ouroboros.Consensus.TypeFamilyWrappers
-import           Shelley.Spec.Ledger.STS.NewEpoch (NewEpochEvent (SumRewards))
+import           Shelley.Spec.Ledger.API (InstantaneousRewards (InstantaneousRewards))
+import           Shelley.Spec.Ledger.STS.Mir (MirEvent (..))
+import           Shelley.Spec.Ledger.STS.NewEpoch (NewEpochEvent (MirEvent, SumRewards))
 import           Shelley.Spec.Ledger.STS.Tick (TickEvent (NewEpochEvent))
 
 data LedgerEvent
@@ -47,6 +50,8 @@ data LedgerEvent
     PoolReRegistration Certificate
   | -- | Rewards are being distributed.
     RewardsDistribution EpochNo (Map StakeCredential Lovelace)
+  | -- | MIR are being distributed.
+    MIRDistribution MIRDistributionDetails
 
 class ConvertLedgerEvent blk where
   toLedgerEvent :: WrapLedgerEvent blk -> Maybe LedgerEvent
@@ -57,12 +62,17 @@ instance ConvertLedgerEvent ByronBlock where
 instance
   ( Crypto ledgerera ~ StandardCrypto,
     Event (Ledger.Core.EraRule "TICK" ledgerera) ~ TickEvent ledgerera,
-    Event (Ledger.Core.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
+    Event (Ledger.Core.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera,
+    Event (Ledger.Core.EraRule "MIR" ledgerera) ~ MirEvent ledgerera
   ) =>
   ConvertLedgerEvent (ShelleyBlock ledgerera)
   where
   toLedgerEvent evt = case unwrapLedgerEvent evt of
     LESumRewards e m -> Just $ RewardsDistribution e m
+    LEMirTransfer rp rt rtt ttr ->
+      Just $
+        MIRDistribution $
+          MIRDistributionDetails rp rt rtt ttr
     _ -> Nothing
 
 instance All ConvertLedgerEvent xs => ConvertLedgerEvent (HardForkBlock xs) where
@@ -71,6 +81,22 @@ instance All ConvertLedgerEvent xs => ConvertLedgerEvent (HardForkBlock xs) wher
       . hcmap (Proxy @ ConvertLedgerEvent) (K . toLedgerEvent)
       . getOneEraLedgerEvent
       . unwrapLedgerEvent
+
+--------------------------------------------------------------------------------
+-- Event details
+--------------------------------------------------------------------------------
+
+-- | Details of fund transfers due to MIR certificates.
+--
+--   Note that the transfers from reserves to treasury and treasury to reserves
+--   are inverse; a transfer of 100 ADA in either direction will result in a net
+--   movement of 0, but we include both directions for assistance in debugging.
+data MIRDistributionDetails = MIRDistributionDetails
+  { reservePayouts :: Map StakeCredential Lovelace,
+    treasuryPayouts :: Map StakeCredential Lovelace,
+    reservesToTreasury :: Lovelace,
+    treasuryToReserves :: Lovelace
+  }
 
 --------------------------------------------------------------------------------
 -- Patterns for event access
@@ -87,6 +113,32 @@ pattern LESumRewards ::
 pattern LESumRewards e m <-
   ShelleyLedgerEventTICK
     (NewEpochEvent (SumRewards e (convertSumRewardsMap -> m)))
+
+pattern LEMirTransfer ::
+  ( Crypto ledgerera ~ StandardCrypto,
+    Event (Ledger.Core.EraRule "TICK" ledgerera) ~ TickEvent ledgerera,
+    Event (Ledger.Core.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera,
+    Event (Ledger.Core.EraRule "MIR" ledgerera) ~ MirEvent ledgerera
+  ) =>
+  Map StakeCredential Lovelace ->
+  Map StakeCredential Lovelace ->
+  Lovelace ->
+  Lovelace ->
+  AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
+pattern LEMirTransfer rp tp rtt ttr <-
+  ShelleyLedgerEventTICK
+    ( NewEpochEvent
+        ( MirEvent
+            ( MirTransfer
+                ( InstantaneousRewards
+                    (convertSumRewardsMap -> rp)
+                    (convertSumRewardsMap -> tp)
+                    (fromShelleyDeltaLovelace -> rtt)
+                    (fromShelleyDeltaLovelace -> ttr)
+                  )
+              )
+          )
+      )
 
 convertSumRewardsMap ::
   Map
