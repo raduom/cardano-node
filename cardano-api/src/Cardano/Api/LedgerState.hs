@@ -1082,7 +1082,7 @@ applyBlock' env oldState validationMode block = do
   stateNew <- case validationMode of
     FullValidation -> tickThenApply config block stateOld
     QuickValidation -> tickThenReapplyCheckHash config block stateOld
-  return oldState { clsState = stateNew }
+  return oldState { clsState = lseState stateNew }
 
 applyBlockWithEvents
   :: Env
