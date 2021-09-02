@@ -124,7 +124,7 @@ spendFromScript key script networkId protocolParameters collateral inFunds valid
     , _fundVariant = PlainOldFund
     }
 
-
+-- todo: use benchmarkWalletScript instead
 plutusWalletScript ::
       SigningKey PaymentKey
   -> PlutusScript PlutusScriptV1

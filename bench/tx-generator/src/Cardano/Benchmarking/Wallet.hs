@@ -60,6 +60,7 @@ walletDeleteFund :: Fund -> Wallet -> Wallet
 walletDeleteFund f w
   = w { walletFunds = FundSet.deleteFund (walletFunds w) f }
 
+--obsolete
 walletUpdateFunds :: [Fund] -> [Fund] -> Wallet -> Wallet
 walletUpdateFunds add del w
   = foldl (flip walletInsertFund) w2 add
@@ -72,7 +73,7 @@ walletExtractFunds :: Wallet -> FundSelector -> Either String (Wallet, [Fund])
 walletExtractFunds w s
   = case walletSelectFunds w s of
     Left err -> Left err
-    Right funds -> Right (walletUpdateFunds [] funds w, funds)
+    Right funds -> Right (foldl (flip walletDeleteFund) w funds, funds)
 
 mkWalletFundSource :: WalletRef -> FundSelector -> FundSource
 mkWalletFundSource walletRef selector
@@ -80,16 +81,17 @@ mkWalletFundSource walletRef selector
 
 mkWalletFundStore :: WalletRef -> FundToStore
 mkWalletFundStore walletRef funds = modifyWalletRef walletRef
-  $ \wallet -> return (walletUpdateFunds funds [] wallet, ())
+  $ \wallet -> return (foldl (flip walletInsertFund) wallet funds, ())
 
-walletCreateCoins ::
+--TODO use Error monad
+sourceToStoreTransaction ::
      TxGenerator era
   -> FundSource
   -> ([Lovelace] -> [Lovelace])
   -> ToUTxO era
   -> FundToStore
   -> IO (Either String (Tx era))
-walletCreateCoins txGenerator fundSource inToOut mkTxOut fundToStore = do
+sourceToStoreTransaction txGenerator fundSource inToOut mkTxOut fundToStore = do
   fundSource >>= \case
     Left err -> return $ Left err
     Right inputFunds -> work inputFunds
@@ -103,25 +105,6 @@ walletCreateCoins txGenerator fundSource inToOut mkTxOut fundToStore = do
         Right (tx, txId) -> do
           fundToStore $ toFunds txId
           return $ Right tx
-
-benchmarkTransaction ::
-     TxGenerator era
-  -> FundSelector
-  -> ([Lovelace] -> [Lovelace])
-  -> (SeqNumber -> ToUTxO era)
-  -> Wallet
-  -> IO (Either String (Wallet, Tx era))
-benchmarkTransaction txGenerator selector inToOut mkTxOut wallet = return $ do
-  inputFunds <- selector (walletFunds wallet)
-  let
-    outValues = inToOut $ map getFundLovelace inputFunds
-    (outputs, toFunds) = mkTxOut newSeqNumber outValues
-  (tx, txId) <- txGenerator inputFunds outputs
-  let
-    newWallet = (walletUpdateFunds (toFunds txId) inputFunds wallet) {walletSeqNumber = newSeqNumber}
-  Right (newWallet , tx)
- where
-  newSeqNumber = succ $ walletSeqNumber wallet
 
 includeChange :: Lovelace -> [Lovelace] -> [Lovelace] -> [Lovelace]
 includeChange fee spend have = case compare changeValue 0 of
@@ -201,22 +184,30 @@ benchmarkWalletScript :: forall era .
   => WalletRef
   -> TxGenerator era
   -> NumberOfTxs
-  -> (Target -> FundSelector)
+  -> (Target -> FundSource)
   -> ([Lovelace] -> [Lovelace])
   -> (Target -> SeqNumber -> ToUTxO era)
+  -> FundToStore
   -> Target
   -> WalletScript era
-benchmarkWalletScript wRef txGenerator (NumberOfTxs maxCount) selector inOut toUTxO targetNode
-  = WalletScript (modifyMVarMasked wRef nextTx)
+benchmarkWalletScript wRef txGenerator (NumberOfTxs maxCount) fundSource inOut toUTxO fundToStore targetNode
+  = WalletScript walletStep
  where
-  nextCall = benchmarkWalletScript wRef txGenerator (NumberOfTxs maxCount) selector inOut toUTxO targetNode
+  nextCall = benchmarkWalletScript wRef txGenerator (NumberOfTxs maxCount) fundSource inOut toUTxO fundToStore targetNode
 
-  nextTx :: Wallet -> IO (Wallet, WalletStep era)
-  nextTx w = if walletSeqNumber w > SeqNumber (fromIntegral maxCount)
-    then return (w, Done)
-    else benchmarkTransaction txGenerator (selector targetNode) inOut (toUTxO targetNode) w >>= \case
-      Right (wNew, tx) -> return (wNew, NextTx nextCall tx)
-      Left err -> return (w, Error err)
+  walletStep :: IO (WalletStep era)
+  walletStep = modifyMVarMasked wRef nextSeqNumber >>= \case
+    Nothing -> return Done
+    Just seqNumber -> do
+      sourceToStoreTransaction txGenerator (fundSource targetNode) inOut (toUTxO targetNode seqNumber) fundToStore >>= \case
+        Left err -> return $ Error err
+        Right tx -> return $ NextTx nextCall tx
+
+  nextSeqNumber :: Wallet -> IO (Wallet, Maybe SeqNumber)
+  nextSeqNumber w = if n > SeqNumber (fromIntegral maxCount)
+      then return (w, Nothing)
+      else return (w {walletSeqNumber = succ n }, Just n)
+    where n = walletSeqNumber w
 
 limitSteps ::
      NumberOfTxs

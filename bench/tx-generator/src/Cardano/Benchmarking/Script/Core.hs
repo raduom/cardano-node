@@ -341,8 +341,8 @@ runBenchmarkInEra (ThreadName threadName) txCount tps era = do
     minTxValue :: Lovelace
     minTxValue = fromIntegral numOutputs * minValuePerUTxO + fee
 
-    selector :: FundSet.Target -> FundSet.FundSelector
-    selector = FundSet.selectInputs ConfirmedBeforeReuse numInputs minTxValue PlainOldFund
+    fundSource :: FundSet.Target -> FundSet.FundSource
+    fundSource target = mkWalletFundSource walletRef $ FundSet.selectInputs ConfirmedBeforeReuse numInputs minTxValue PlainOldFund target
 
     inToOut :: [Lovelace] -> [Lovelace]
     inToOut = FundSet.inputsToOutputsWithFee fee numOutputs
@@ -352,8 +352,10 @@ runBenchmarkInEra (ThreadName threadName) txCount tps era = do
     toUTxO :: FundSet.Target -> FundSet.SeqNumber -> ToUTxO era
     toUTxO target seqNumber = Wallet.mkUTxO networkId fundKey (InFlight target seqNumber)
 
+    fundToStore = mkWalletFundStore walletRef
+
     walletScript :: FundSet.Target -> WalletScript era
-    walletScript = benchmarkWalletScript walletRef txGenerator txCount selector inToOut toUTxO
+    walletScript = benchmarkWalletScript walletRef txGenerator txCount fundSource inToOut toUTxO fundToStore
 
     coreCall :: AsType era -> ExceptT TxGenError IO AsyncBenchmarkControl
     coreCall eraProxy = GeneratorTx.walletBenchmark (btTxSubmit_ tracers) (btN2N_ tracers) connectClient
@@ -453,7 +455,7 @@ localCreateScriptFunds value count = do
         toUTxO = PlutusExample.mkUtxoScript networkId fundKey (script,scriptData) Confirmed
         fundToStore = mkWalletFundStore walletRef
 
-      tx <- liftIO $ walletCreateCoins (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO fundToStore
+      tx <- liftIO $ sourceToStoreTransaction (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO fundToStore
       return $ fmap txInModeCardano tx
   createChangeGeneric createCoins value count
 
@@ -477,7 +479,7 @@ createChangeInEra value count _proxy = do
         toUTxO = Wallet.mkUTxO networkId fundKey Confirmed
         fundToStore = mkWalletFundStore walletRef
 
-      (tx :: Either String (Tx era)) <- liftIO $ walletCreateCoins (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO fundToStore
+      (tx :: Either String (Tx era)) <- liftIO $ sourceToStoreTransaction (genTx (mkFee fee) TxMetadataNone) selector inOut toUTxO fundToStore
       return $ fmap txInModeCardano tx
   createChangeGeneric createCoins value count
 
